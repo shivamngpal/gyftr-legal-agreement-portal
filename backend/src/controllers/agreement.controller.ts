@@ -3,6 +3,33 @@ import { createAgreementSchema, agreementIdSchema, updateAgreementSchema, update
 import { AgreementService } from "../services/agreement.service";
 import { z } from "zod";
 
+export const uploadDraft = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = agreementIdSchema.parse(req.params);
+    const file = req.file;
+
+    if (!file) {
+      res.status(400).json({ error: "No file uploaded or invalid file type." });
+      return;
+    }
+
+    if (file.mimetype !== "application/pdf") {
+      res.status(400).json({ error: "Only PDF files are allowed." });
+      return;
+    }
+
+    const draft = await AgreementService.uploadDraft(id, file.buffer, file.originalname);
+    res.status(201).json(draft);
+  } catch (error: any) {
+    if (error instanceof z.ZodError || error?.name === "ZodError") {
+      res.status(400).json({ error: "Validation error", details: error.errors });
+      return;
+    }
+    console.error("Upload Draft Error:", error);
+    res.status(500).json({ error: "Internal server error", message: error?.message });
+  }
+};
+
 export const createAgreement = async (req: Request, res: Response): Promise<void> => {
   try {
     const data = createAgreementSchema.parse(req.body);

@@ -32,6 +32,13 @@ interface ReviewStatus {
   updatedAt: string;
 }
 
+interface Draft {
+  id: string;
+  version: number;
+  fileUrl: string;
+  createdAt: string;
+}
+
 interface AgreementDetails {
   id: string;
   clientName: string;
@@ -44,6 +51,7 @@ interface AgreementDetails {
   businessSpoc: Spoc | null;
   complianceSpoc: Spoc | null;
   reviewStatuses: ReviewStatus[];
+  drafts: Draft[];
 }
 
 export default function AgreementDetailsPage() {
@@ -111,6 +119,49 @@ export default function AgreementDetailsPage() {
       toast.error(err.message);
     } finally {
       setIsUpdating(null);
+    }
+  };
+
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.type !== "application/pdf") {
+      toast.error("Only PDF files are allowed");
+      return;
+    }
+
+    if (!token) return;
+    setIsUploading(true);
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await fetch(`http://localhost:5000/api/agreements/${id}/drafts`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || data.error || "Failed to upload draft");
+      }
+
+      toast.success("Draft uploaded successfully");
+      fetchAgreement();
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     }
   };
 
@@ -299,7 +350,53 @@ export default function AgreementDetailsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <PlaceholderCard title="Remarks" />
           <PlaceholderCard title="History" />
-          <PlaceholderCard title="Drafts" />
+          {/* Drafts Section */}
+          <Card className="col-span-1 md:col-span-2 lg:col-span-3">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-lg">Drafts</CardTitle>
+              {user?.role === "LEGAL" && (
+                <div>
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    ref={fileInputRef}
+                    className="hidden"
+                    onChange={handleFileUpload}
+                  />
+                  <Button
+                    size="sm"
+                    disabled={isUploading}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    {isUploading ? "Uploading..." : "Upload Draft"}
+                  </Button>
+                </div>
+              )}
+            </CardHeader>
+            <CardContent>
+              {(!agreement.drafts || agreement.drafts.length === 0) ? (
+                <p className="text-sm text-muted-foreground">No drafts uploaded yet.</p>
+              ) : (
+                <div className="space-y-4 mt-4">
+                  {agreement.drafts.map((draft) => (
+                    <div key={draft.id} className="flex items-center justify-between p-3 border rounded-md">
+                      <div>
+                        <p className="text-sm font-medium">Version {draft.version}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Uploaded on {new Date(draft.createdAt).toLocaleString()}
+                        </p>
+                      </div>
+                      <a href={draft.fileUrl} target="_blank" rel="noopener noreferrer">
+                        <Button variant="outline" size="sm">
+                          View PDF
+                        </Button>
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
           <PlaceholderCard title="Clause Analysis" />
           <PlaceholderCard title="Reminders" />
           <PlaceholderCard title="Sign-off" />

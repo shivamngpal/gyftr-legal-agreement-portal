@@ -1,8 +1,34 @@
 import { prisma } from "../config/db";
 import { CreateAgreementRequest, UpdateAgreementRequest } from "../utils/validation";
 import { Role } from "../generated/prisma/enums";
+import { S3Service } from "./s3.service";
 
 export class AgreementService {
+  static async uploadDraft(agreementId: string, fileBuffer: Buffer, fileName: string) {
+    const agreement = await prisma.agreement.findUnique({ where: { id: agreementId } });
+    if (!agreement) throw new Error("Agreement not found");
+
+    // Upload to S3
+    const fileUrl = await S3Service.uploadPdf(fileBuffer, fileName, agreementId);
+
+    // Get max version
+    const maxDraft = await prisma.draft.findFirst({
+      where: { agreementId },
+      orderBy: { version: "desc" },
+    });
+
+    const nextVersion = maxDraft ? maxDraft.version + 1 : 1;
+
+    const draft = await prisma.draft.create({
+      data: {
+        agreementId,
+        version: nextVersion,
+        fileUrl,
+      },
+    });
+
+    return draft;
+  }
   static async createAgreement(data: CreateAgreementRequest) {
     const requiredRoles: Role[] = ["LEGAL", "FINANCE", "BUSINESS", "COMPLIANCE"];
     const reviewStatusesData = requiredRoles.map((role) => ({
@@ -52,7 +78,7 @@ export class AgreementService {
   }
 
   static async getAgreementById(id: string) {
-    return await prisma.agreement.findUnique({
+    const agreement = await prisma.agreement.findUnique({
       where: { id },
       include: {
         legalSpoc: { select: { id: true, name: true, email: true, role: true } },
@@ -60,8 +86,21 @@ export class AgreementService {
         businessSpoc: { select: { id: true, name: true, email: true, role: true } },
         complianceSpoc: { select: { id: true, name: true, email: true, role: true } },
         reviewStatuses: true,
+        drafts: { orderBy: { version: "desc" } },
       },
     });
+
+    if (!agreement) return null;
+
+    // Generate presigned URLs for secure viewing
+    const signedDrafts = await Promise.all(
+      agreement.drafts.map(async (draft) => ({
+        ...draft,
+        fileUrl: await S3Service.getPresignedUrl(draft.fileUrl),
+      }))
+    );
+
+    return { ...agreement, drafts: signedDrafts };
   }
 
   static async updateReviewStatus(agreementId: string, team: Role, newStatus: "PENDING" | "UNDER_REVIEW" | "APPROVED" | "REJECTED", actorId: string) {

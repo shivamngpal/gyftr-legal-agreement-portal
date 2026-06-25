@@ -1,22 +1,28 @@
 import { Router } from "express";
+import multer from "multer";
 import { 
   createAgreement, 
   getAllAgreements, 
   getAgreementById, 
   updateAgreement, 
   deleteAgreement, 
-  updateReviewStatus 
+  updateReviewStatus,
+  uploadDraft
 } from "../controllers/agreement.controller";
 import { authenticate } from "../middleware/auth.middleware";
 import { authorizeRoles } from "../middleware/role.middleware";
 
 const router = Router();
+const upload = multer({ storage: multer.memoryStorage() });
 
 // Protect all routes with authentication
 router.use(authenticate);
 
 // Create Agreement -> LEGAL only
 router.post("/", authorizeRoles("LEGAL"), createAgreement);
+
+// Upload Draft -> LEGAL only
+router.post("/:id/drafts", authorizeRoles("LEGAL"), upload.single("file"), uploadDraft);
 
 // Get All Agreements -> Any authenticated user
 router.get("/", getAllAgreements);
