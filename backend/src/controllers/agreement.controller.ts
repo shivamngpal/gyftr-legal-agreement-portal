@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { createAgreementSchema, agreementIdSchema, updateAgreementSchema } from "../utils/validation";
+import { createAgreementSchema, agreementIdSchema, updateAgreementSchema, updateReviewStatusSchema } from "../utils/validation";
 import { AgreementService } from "../services/agreement.service";
 import { z } from "zod";
 
@@ -48,6 +48,38 @@ export const getAgreementById = async (req: Request, res: Response): Promise<voi
     }
     console.error("Get Agreement By ID Error:", error);
     res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+export const updateReviewStatus = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = agreementIdSchema.parse(req.params);
+    const { status } = updateReviewStatusSchema.parse(req.body);
+    const userRole = (req as any).user?.role;
+    const userId = (req as any).user?.userId;
+
+    if (!userRole || !userId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const result = await AgreementService.updateReviewStatus(id, userRole as any, status, userId);
+    res.json(result);
+  } catch (error: any) {
+    if (error instanceof z.ZodError || error?.name === "ZodError") {
+      res.status(400).json({ error: "Validation error", details: error.errors });
+      return;
+    }
+    if (error.message && error.message.includes("Invalid status transition")) {
+      res.status(400).json({ error: error.message });
+      return;
+    }
+    if (error.message === "Review status not found") {
+      res.status(404).json({ error: "Review status not found for this team." });
+      return;
+    }
+    console.error("Update Review Status Error:", error);
+    res.status(500).json({ error: "Internal server error", message: error?.message });
   }
 };
 

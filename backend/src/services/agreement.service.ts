@@ -64,6 +64,43 @@ export class AgreementService {
     });
   }
 
+  static async updateReviewStatus(agreementId: string, team: Role, newStatus: "PENDING" | "UNDER_REVIEW" | "APPROVED" | "REJECTED", actorId: string) {
+    const reviewStatus = await prisma.reviewStatus.findUnique({
+      where: { agreementId_team: { agreementId, team } },
+    });
+
+    if (!reviewStatus) throw new Error("Review status not found");
+
+    const validTransitions: Record<string, string[]> = {
+      PENDING: ["UNDER_REVIEW"],
+      UNDER_REVIEW: ["APPROVED", "REJECTED"],
+      APPROVED: [],
+      REJECTED: [],
+    };
+
+    if (!validTransitions[reviewStatus.status].includes(newStatus)) {
+      throw new Error(`Invalid status transition from ${reviewStatus.status} to ${newStatus}`);
+    }
+
+    return await prisma.$transaction(async (tx) => {
+      const updated = await tx.reviewStatus.update({
+        where: { id: reviewStatus.id },
+        data: { status: newStatus },
+      });
+
+      await tx.historyLog.create({
+        data: {
+          agreementId,
+          actorId,
+          action: "STATUS_CHANGE",
+          details: `${team} status changed from ${reviewStatus.status} to ${newStatus}`,
+        },
+      });
+
+      return updated;
+    });
+  }
+
   static async updateAgreement(id: string, data: UpdateAgreementRequest) {
     const updateData: any = { ...data };
     if (data.startDate) {

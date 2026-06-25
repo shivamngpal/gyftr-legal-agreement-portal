@@ -9,6 +9,14 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeftIcon } from "lucide-react";
 import Link from "next/link";
+import { toast } from "sonner";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Spoc {
   id: string;
@@ -40,12 +48,13 @@ interface AgreementDetails {
 
 export default function AgreementDetailsPage() {
   const { id } = useParams() as { id: string };
-  const { token } = useAuth();
+  const { user, token } = useAuth();
   const router = useRouter();
 
   const [agreement, setAgreement] = useState<AgreementDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isUpdating, setIsUpdating] = useState<string | null>(null);
 
   const fetchAgreement = useCallback(async () => {
     if (!token) return;
@@ -77,6 +86,33 @@ export default function AgreementDetailsPage() {
   useEffect(() => {
     fetchAgreement();
   }, [fetchAgreement]);
+
+  const handleStatusUpdate = async (team: string, newStatus: string) => {
+    if (!token) return;
+    setIsUpdating(team);
+    try {
+      const res = await fetch(`http://localhost:5000/api/agreements/${id}/review`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || data.error || "Failed to update review status");
+      }
+      
+      toast.success(`${team} status updated to ${newStatus}`);
+      fetchAgreement();
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setIsUpdating(null);
+    }
+  };
 
   const getTeamStatusBadge = (statuses: ReviewStatus[], team: string) => {
     const status = statuses.find((s) => s.team === team)?.status || "N/A";
@@ -217,22 +253,43 @@ export default function AgreementDetailsPage() {
             <CardTitle className="text-lg">Team Review Status</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium">Legal Review</p>
-              {getTeamStatusBadge(agreement.reviewStatuses, "LEGAL")}
-            </div>
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium">Finance Review</p>
-              {getTeamStatusBadge(agreement.reviewStatuses, "FINANCE")}
-            </div>
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium">Business Review</p>
-              {getTeamStatusBadge(agreement.reviewStatuses, "BUSINESS")}
-            </div>
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium">Compliance Review</p>
-              {getTeamStatusBadge(agreement.reviewStatuses, "COMPLIANCE")}
-            </div>
+            {["LEGAL", "FINANCE", "BUSINESS", "COMPLIANCE"].map((team) => {
+              const statusObj = agreement.reviewStatuses.find((s) => s.team === team);
+              const status = statusObj?.status || "N/A";
+              
+              const isOwnTeam = user?.role === team;
+              const canUpdate = isOwnTeam && status !== "APPROVED" && status !== "REJECTED";
+
+              return (
+                <div key={team} className="flex items-center justify-between">
+                  <p className="text-sm font-medium capitalize">{team.toLowerCase()} Review</p>
+                  {canUpdate ? (
+                    <Select
+                      disabled={isUpdating === team}
+                      value={status}
+                      onValueChange={(val) => handleStatusUpdate(team, val || "")}
+                    >
+                      <SelectTrigger className="w-[140px] h-8 text-xs">
+                        <SelectValue placeholder="Update Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {status === "PENDING" && (
+                          <SelectItem value="UNDER_REVIEW">Start Review</SelectItem>
+                        )}
+                        {status === "UNDER_REVIEW" && (
+                          <>
+                            <SelectItem value="APPROVED">Approve</SelectItem>
+                            <SelectItem value="REJECTED">Reject</SelectItem>
+                          </>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    getTeamStatusBadge(agreement.reviewStatuses, team)
+                  )}
+                </div>
+              );
+            })}
           </CardContent>
         </Card>
       </div>

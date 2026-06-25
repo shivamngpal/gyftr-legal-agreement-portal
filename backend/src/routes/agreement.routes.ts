@@ -1,5 +1,12 @@
 import { Router } from "express";
-import { createAgreement, getAllAgreements, getAgreementById, updateAgreement, deleteAgreement } from "../controllers/agreement.controller";
+import { 
+  createAgreement, 
+  getAllAgreements, 
+  getAgreementById, 
+  updateAgreement, 
+  deleteAgreement, 
+  updateReviewStatus 
+} from "../controllers/agreement.controller";
 import { authenticate } from "../middleware/auth.middleware";
 import { authorizeRoles } from "../middleware/role.middleware";
 
@@ -16,6 +23,9 @@ router.get("/", getAllAgreements);
 
 // Get Agreement By ID -> Any authenticated user
 router.get("/:id", getAgreementById);
+
+// Update Review Status -> Any authenticated user
+router.patch("/:id/review", updateReviewStatus);
 
 // Update Agreement -> LEGAL only
 router.put("/:id", authorizeRoles("LEGAL"), updateAgreement);

@@ -25,6 +25,12 @@ export const agreementIdSchema = z.object({
 
 export const updateAgreementSchema = createAgreementSchema.partial();
 
+export const updateReviewStatusSchema = z.object({
+  status: z.enum(["PENDING", "UNDER_REVIEW", "APPROVED", "REJECTED"], {
+    error: "Invalid review status",
+  }),
+});
+
 export type LoginRequest = z.infer<typeof loginSchema>;
 export type CreateAgreementRequest = z.infer<typeof createAgreementSchema>;
 export type UpdateAgreementRequest = z.infer<typeof updateAgreementSchema>;
