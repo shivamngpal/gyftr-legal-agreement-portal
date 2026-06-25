@@ -10,4 +10,161 @@ datasource db {
   provider = "postgresql"
 }
 
-// Models will be added in subsequent tasks
+enum Role {
+  LEGAL
+  FINANCE
+  BUSINESS
+  COMPLIANCE
+}
+
+enum AgreementType {
+  API_DIRECT
+  WHITE_LABEL
+  RESELLER
+  ENTERPRISE
+}
+
+enum ReviewStatusEnum {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum ClauseOutcome {
+  ACCEPTED
+  HELD
+  PARTIAL
+  PENDING
+}
+
+enum AgreementStatus {
+  DRAFT
+  IN_REVIEW
+  PENDING_SIGNATURE
+  EXECUTED
+  CANCELLED
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  password  String // Hashed password
+  role      Role
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  legalAgreements      Agreement[] @relation("LegalSpoc")
+  financeAgreements    Agreement[] @relation("FinanceSpoc")
+  businessAgreements   Agreement[] @relation("BusinessSpoc")
+  complianceAgreements Agreement[] @relation("ComplianceSpoc")
+
+  remarks       Remark[]
+  remindersSent Reminder[]   @relation("ReminderSender")
+  signOffs      SignOff[]
+  historyLogs   HistoryLog[] @relation("HistoryActor")
+}
+
+model Agreement {
+  id          String          @id @default(uuid())
+  clientName  String
+  type        AgreementType
+  status      AgreementStatus @default(DRAFT)
+  startDate   DateTime
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  documentUrl String?
+
+  legalSpocId      String?
+  legalSpoc        User?   @relation("LegalSpoc", fields: [legalSpocId], references: [id])
+  financeSpocId    String?
+  financeSpoc      User?   @relation("FinanceSpoc", fields: [financeSpocId], references: [id])
+  businessSpocId   String?
+  businessSpoc     User?   @relation("BusinessSpoc", fields: [businessSpocId], references: [id])
+  complianceSpocId String?
+  complianceSpoc   User?   @relation("ComplianceSpoc", fields: [complianceSpocId], references: [id])
+
+  reviewStatuses ReviewStatus[]
+  remarks        Remark[]
+  historyLogs    HistoryLog[]
+  drafts         Draft[]
+  reminders      Reminder[]
+  signOffs       SignOff[]
+}
+
+model ReviewStatus {
+  id          String           @id @default(uuid())
+  agreementId String
+  agreement   Agreement        @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  team        Role
+  status      ReviewStatusEnum @default(PENDING)
+  updatedAt   DateTime         @updatedAt
+
+  @@unique([agreementId, team])
+}
+
+model Remark {
+  id          String    @id @default(uuid())
+  agreementId String
+  agreement   Agreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  authorId    String
+  author      User      @relation(fields: [authorId], references: [id])
+  message     String
+  createdAt   DateTime  @default(now())
+}
+
+model HistoryLog {
+  id          String    @id @default(uuid())
+  agreementId String
+  agreement   Agreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  actorId     String
+  actor       User      @relation("HistoryActor", fields: [actorId], references: [id])
+  action      String // e.g., "STATUS_CHANGE", "REMINDER_SENT", "SIGNED_OFF"
+  details     String // Description of the change
+  timestamp   DateTime  @default(now())
+}
+
+model Draft {
+  id          String    @id @default(uuid())
+  agreementId String
+  agreement   Agreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  version     Int
+  fileUrl     String // S3 URL
+  createdAt   DateTime  @default(now())
+
+  clauses Clause[]
+}
+
+model Clause {
+  id         String        @id @default(uuid())
+  draftId    String
+  draft      Draft         @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  identifier String // e.g., "Clause 1.1", "Termination Clause"
+  text       String
+  outcome    ClauseOutcome @default(PENDING)
+  comments   String?
+}
+
+model Reminder {
+  id          String    @id @default(uuid())
+  agreementId String
+  agreement   Agreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  senderId    String
+  sender      User      @relation("ReminderSender", fields: [senderId], references: [id])
+  targetTeam  Role
+  message     String?
+  timestamp   DateTime  @default(now())
+  read        Boolean   @default(false)
+}
+
+model SignOff {
+  id          String    @id @default(uuid())
+  agreementId String
+  agreement   Agreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  signatoryId String
+  signatory   User      @relation(fields: [signatoryId], references: [id])
+  timestamp   DateTime  @default(now())
+
+  @@unique([agreementId, signatoryId])
+}

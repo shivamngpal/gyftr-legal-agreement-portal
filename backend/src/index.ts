@@ -4,9 +4,14 @@ import { env } from "./config/env";
 
 const app = express();
 
+import authRoutes from "./routes/auth.routes";
+
 // Middleware
 app.use(cors({ origin: env.frontendUrl }));
 app.use(express.json());
+
+// Routes
+app.use("/api/auth", authRoutes);
 
 // Health check
 app.get("/health", (_req, res) => {

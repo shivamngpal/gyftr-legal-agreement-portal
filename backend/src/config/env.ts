@@ -13,4 +13,9 @@ export const env = {
     region: process.env.AWS_REGION || "",
     s3Bucket: process.env.AWS_S3_BUCKET || "",
   },
+  jwt: {
+    secret: process.env.JWT_SECRET || "default_development_secret",
+    expiresIn: process.env.JWT_EXPIRES_IN || "1d",
+  },
 };
+
