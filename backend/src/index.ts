@@ -5,6 +5,7 @@ import { env } from "./config/env";
 const app = express();
 
 import authRoutes from "./routes/auth.routes";
+import agreementRoutes from "./routes/agreement.routes";
 
 // Middleware
 app.use(cors({ origin: env.frontendUrl }));
@@ -12,6 +13,7 @@ app.use(express.json());
 
 // Routes
 app.use("/api/auth", authRoutes);
+app.use("/api/agreements", agreementRoutes);
 
 // Health check
 app.get("/health", (_req, res) => {
