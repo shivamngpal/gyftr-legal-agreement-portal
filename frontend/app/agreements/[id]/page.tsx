@@ -39,6 +39,17 @@ interface Draft {
   createdAt: string;
 }
 
+interface Remark {
+  id: string;
+  message: string;
+  createdAt: string;
+  author: {
+    id: string;
+    name: string;
+    role: string;
+  };
+}
+
 interface AgreementDetails {
   id: string;
   clientName: string;
@@ -63,6 +74,9 @@ export default function AgreementDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
+  const [remarks, setRemarks] = useState<Remark[]>([]);
+  const [newRemark, setNewRemark] = useState("");
+  const [isSubmittingRemark, setIsSubmittingRemark] = useState(false);
 
   const fetchAgreement = useCallback(async () => {
     if (!token) return;
@@ -84,6 +98,15 @@ export default function AgreementDetailsPage() {
       
       const data = await res.json();
       setAgreement(data);
+
+      // Fetch remarks
+      const remarksRes = await fetch(`http://localhost:5000/api/agreements/${id}/remarks`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (remarksRes.ok) {
+        const remarksData = await remarksRes.json();
+        setRemarks(remarksData);
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -119,6 +142,34 @@ export default function AgreementDetailsPage() {
       toast.error(err.message);
     } finally {
       setIsUpdating(null);
+    }
+  };
+
+  const handleAddRemark = async () => {
+    if (!newRemark.trim() || !token) return;
+    setIsSubmittingRemark(true);
+    try {
+      const res = await fetch(`http://localhost:5000/api/agreements/${id}/remarks`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ message: newRemark }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || data.error || "Failed to add remark");
+      }
+
+      toast.success("Remark added successfully");
+      setNewRemark("");
+      fetchAgreement();
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setIsSubmittingRemark(false);
     }
   };
 
@@ -348,7 +399,52 @@ export default function AgreementDetailsPage() {
       <div className="mt-8">
         <h3 className="text-xl font-bold tracking-tight mb-4">Workspace Modules</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <PlaceholderCard title="Remarks" />
+          {/* Remarks Section */}
+          <Card className="col-span-1 md:col-span-2 lg:col-span-3">
+            <CardHeader>
+              <CardTitle className="text-lg">Remarks & Discussion</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4 max-h-[300px] overflow-y-auto mb-4 p-1">
+                {remarks.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No remarks yet.</p>
+                ) : (
+                  remarks.map((remark) => (
+                    <div key={remark.id} className="p-3 border rounded-md bg-gray-50/50">
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center space-x-2">
+                          <p className="text-sm font-semibold">{remark.author.name}</p>
+                          <Badge variant="outline" className="text-[10px] h-4 px-1">{remark.author.role}</Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(remark.createdAt).toLocaleString()}
+                        </p>
+                      </div>
+                      <p className="text-sm whitespace-pre-wrap">{remark.message}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="pt-2 border-t mt-4 flex flex-col space-y-2">
+                <textarea
+                  className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  placeholder="Add a remark..."
+                  value={newRemark}
+                  onChange={(e) => setNewRemark(e.target.value)}
+                  disabled={isSubmittingRemark}
+                />
+                <div className="flex justify-end">
+                  <Button 
+                    onClick={handleAddRemark} 
+                    disabled={isSubmittingRemark || !newRemark.trim()}
+                    size="sm"
+                  >
+                    {isSubmittingRemark ? "Submitting..." : "Submit Remark"}
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
           <PlaceholderCard title="History" />
           {/* Drafts Section */}
           <Card className="col-span-1 md:col-span-2 lg:col-span-3">

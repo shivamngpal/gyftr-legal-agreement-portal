@@ -31,6 +31,10 @@ export const updateReviewStatusSchema = z.object({
   }),
 });
 
+export const createRemarkSchema = z.object({
+  message: z.string().min(1, "Message cannot be empty"),
+});
+
 export type LoginRequest = z.infer<typeof loginSchema>;
 export type CreateAgreementRequest = z.infer<typeof createAgreementSchema>;
 export type UpdateAgreementRequest = z.infer<typeof updateAgreementSchema>;

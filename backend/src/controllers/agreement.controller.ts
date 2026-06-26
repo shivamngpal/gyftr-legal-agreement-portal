@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { createAgreementSchema, agreementIdSchema, updateAgreementSchema, updateReviewStatusSchema } from "../utils/validation";
+import { createAgreementSchema, agreementIdSchema, updateAgreementSchema, updateReviewStatusSchema, createRemarkSchema } from "../utils/validation";
 import { AgreementService } from "../services/agreement.service";
 import { z } from "zod";
 
@@ -139,15 +139,53 @@ export const deleteAgreement = async (req: Request, res: Response): Promise<void
     await AgreementService.deleteAgreement(id);
     res.status(204).send();
   } catch (error: any) {
-    if (error instanceof z.ZodError) {
-      res.status(400).json({ error: "Validation error", details: (error as any).errors });
-      return;
-    }
-    if (error.code === "P2025") {
-      res.status(404).json({ error: "Agreement not found" });
+    if (error instanceof z.ZodError || error?.name === "ZodError") {
+      res.status(400).json({ error: "Validation error", details: error.errors });
       return;
     }
     console.error("Delete Agreement Error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    res.status(500).json({ error: "Internal server error", message: error?.message });
+  }
+};
+
+export const getRemarks = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = agreementIdSchema.parse(req.params);
+    const remarks = await AgreementService.getRemarks(id);
+    res.json(remarks);
+  } catch (error: any) {
+    if (error instanceof z.ZodError || error?.name === "ZodError") {
+      res.status(400).json({ error: "Validation error", details: error.errors });
+      return;
+    }
+    console.error("Get Remarks Error:", error);
+    res.status(500).json({ error: "Internal server error", message: error?.message });
+  }
+};
+
+export const createRemark = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = agreementIdSchema.parse(req.params);
+    const { message } = createRemarkSchema.parse(req.body);
+    const userId = (req as any).user?.userId;
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const remark = await AgreementService.createRemark(id, userId, message);
+    res.status(201).json(remark);
+  } catch (error: any) {
+    if (error instanceof z.ZodError || error?.name === "ZodError") {
+      res.status(400).json({ error: "Validation error", details: error.errors });
+      return;
+    }
+    if (error.message === "Agreement not found") {
+      res.status(404).json({ error: "Agreement not found" });
+      return;
+    }
+    console.error("Create Remark Error:", error);
+    res.status(500).json({ error: "Internal server error", message: error?.message });
   }
 };

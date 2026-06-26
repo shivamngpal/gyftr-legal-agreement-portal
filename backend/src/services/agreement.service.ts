@@ -156,4 +156,43 @@ export class AgreementService {
       where: { id },
     });
   }
+
+  static async getRemarks(agreementId: string) {
+    return await prisma.remark.findMany({
+      where: { agreementId },
+      orderBy: { createdAt: "desc" },
+      include: {
+        author: { select: { id: true, name: true, role: true } },
+      },
+    });
+  }
+
+  static async createRemark(agreementId: string, authorId: string, message: string) {
+    const agreement = await prisma.agreement.findUnique({ where: { id: agreementId } });
+    if (!agreement) throw new Error("Agreement not found");
+
+    return await prisma.$transaction(async (tx) => {
+      const remark = await tx.remark.create({
+        data: {
+          agreementId,
+          authorId,
+          message,
+        },
+        include: {
+          author: { select: { id: true, name: true, role: true } },
+        },
+      });
+
+      await tx.historyLog.create({
+        data: {
+          agreementId,
+          actorId: authorId,
+          action: "REMARK_ADDED",
+          details: `Added a remark: "${message.length > 50 ? message.substring(0, 50) + "..." : message}"`,
+        },
+      });
+
+      return remark;
+    });
+  }
 }
