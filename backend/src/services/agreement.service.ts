@@ -4,55 +4,80 @@ import { Role } from "../generated/prisma/enums";
 import { S3Service } from "./s3.service";
 
 export class AgreementService {
-  static async uploadDraft(agreementId: string, fileBuffer: Buffer, fileName: string) {
+  static async uploadDraft(agreementId: string, fileBuffer: Buffer, fileName: string, actorId: string) {
     const agreement = await prisma.agreement.findUnique({ where: { id: agreementId } });
     if (!agreement) throw new Error("Agreement not found");
 
     // Upload to S3
     const fileUrl = await S3Service.uploadPdf(fileBuffer, fileName, agreementId);
 
-    // Get max version
-    const maxDraft = await prisma.draft.findFirst({
-      where: { agreementId },
-      orderBy: { version: "desc" },
+    return await prisma.$transaction(async (tx) => {
+      // Get max version
+      const maxDraft = await tx.draft.findFirst({
+        where: { agreementId },
+        orderBy: { version: "desc" },
+      });
+
+      const nextVersion = maxDraft ? maxDraft.version + 1 : 1;
+
+      const draft = await tx.draft.create({
+        data: {
+          agreementId,
+          version: nextVersion,
+          fileUrl,
+        },
+      });
+
+      await tx.historyLog.create({
+        data: {
+          agreementId,
+          actorId,
+          action: "DRAFT_UPLOADED",
+          details: `Uploaded Draft Version ${nextVersion}`,
+        },
+      });
+
+      return draft;
     });
-
-    const nextVersion = maxDraft ? maxDraft.version + 1 : 1;
-
-    const draft = await prisma.draft.create({
-      data: {
-        agreementId,
-        version: nextVersion,
-        fileUrl,
-      },
-    });
-
-    return draft;
   }
-  static async createAgreement(data: CreateAgreementRequest) {
+
+  static async createAgreement(data: CreateAgreementRequest, actorId: string) {
     const requiredRoles: Role[] = ["LEGAL", "FINANCE", "BUSINESS", "COMPLIANCE"];
     const reviewStatusesData = requiredRoles.map((role) => ({
       team: role,
       status: "PENDING" as const,
     }));
 
-    return await prisma.agreement.create({
-      data: {
-        clientName: data.clientName,
-        type: data.type,
-        startDate: new Date(data.startDate),
-        documentUrl: data.documentUrl,
-        legalSpocId: data.legalSpocId,
-        financeSpocId: data.financeSpocId,
-        businessSpocId: data.businessSpocId,
-        complianceSpocId: data.complianceSpocId,
-        reviewStatuses: {
-          create: reviewStatusesData,
+    return await prisma.$transaction(async (tx) => {
+      const agreement = await tx.agreement.create({
+        data: {
+          clientName: data.clientName,
+          type: data.type,
+          startDate: new Date(data.startDate),
+          documentUrl: data.documentUrl,
+          legalSpocId: data.legalSpocId,
+          financeSpocId: data.financeSpocId,
+          businessSpocId: data.businessSpocId,
+          complianceSpocId: data.complianceSpocId,
+          reviewStatuses: {
+            create: reviewStatusesData,
+          },
         },
-      },
-      include: {
-        reviewStatuses: true,
-      },
+        include: {
+          reviewStatuses: true,
+        },
+      });
+
+      await tx.historyLog.create({
+        data: {
+          agreementId: agreement.id,
+          actorId,
+          action: "AGREEMENT_CREATED",
+          details: `Created Agreement for ${data.clientName}`,
+        },
+      });
+
+      return agreement;
     });
   }
 
@@ -193,6 +218,16 @@ export class AgreementService {
       });
 
       return remark;
+    });
+  }
+
+  static async getHistory(agreementId: string) {
+    return await prisma.historyLog.findMany({
+      where: { agreementId },
+      orderBy: { timestamp: "desc" },
+      include: {
+        actor: { select: { id: true, name: true, role: true } },
+      },
     });
   }
 }

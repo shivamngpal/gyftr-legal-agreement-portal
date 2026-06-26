@@ -9,7 +9,8 @@ import {
   updateReviewStatus,
   uploadDraft,
   getRemarks,
-  createRemark
+  createRemark,
+  getHistory
 } from "../controllers/agreement.controller";
 import { authenticate } from "../middleware/auth.middleware";
 import { authorizeRoles } from "../middleware/role.middleware";
@@ -38,6 +39,9 @@ router.patch("/:id/review", updateReviewStatus);
 // Remarks -> Any authenticated user
 router.get("/:id/remarks", getRemarks);
 router.post("/:id/remarks", createRemark);
+
+// History -> Any authenticated user
+router.get("/:id/history", getHistory);
 
 // Update Agreement -> LEGAL only
 router.put("/:id", authorizeRoles("LEGAL"), updateAgreement);

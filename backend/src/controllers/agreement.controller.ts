@@ -7,6 +7,12 @@ export const uploadDraft = async (req: Request, res: Response): Promise<void> =>
   try {
     const { id } = agreementIdSchema.parse(req.params);
     const file = req.file;
+    const userId = (req as any).user?.userId;
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
 
     if (!file) {
       res.status(400).json({ error: "No file uploaded or invalid file type." });
@@ -18,7 +24,7 @@ export const uploadDraft = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    const draft = await AgreementService.uploadDraft(id, file.buffer, file.originalname);
+    const draft = await AgreementService.uploadDraft(id, file.buffer, file.originalname, userId);
     res.status(201).json(draft);
   } catch (error: any) {
     if (error instanceof z.ZodError || error?.name === "ZodError") {
@@ -33,7 +39,14 @@ export const uploadDraft = async (req: Request, res: Response): Promise<void> =>
 export const createAgreement = async (req: Request, res: Response): Promise<void> => {
   try {
     const data = createAgreementSchema.parse(req.body);
-    const result = await AgreementService.createAgreement(data);
+    const userId = (req as any).user?.userId;
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const result = await AgreementService.createAgreement(data, userId);
     res.status(201).json(result);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -186,6 +199,21 @@ export const createRemark = async (req: Request, res: Response): Promise<void> =
       return;
     }
     console.error("Create Remark Error:", error);
+    res.status(500).json({ error: "Internal server error", message: error?.message });
+  }
+};
+
+export const getHistory = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = agreementIdSchema.parse(req.params);
+    const history = await AgreementService.getHistory(id);
+    res.json(history);
+  } catch (error: any) {
+    if (error instanceof z.ZodError || error?.name === "ZodError") {
+      res.status(400).json({ error: "Validation error", details: error.errors });
+      return;
+    }
+    console.error("Get History Error:", error);
     res.status(500).json({ error: "Internal server error", message: error?.message });
   }
 };

@@ -50,6 +50,18 @@ interface Remark {
   };
 }
 
+interface HistoryLog {
+  id: string;
+  action: string;
+  details: string | null;
+  timestamp: string;
+  actor: {
+    id: string;
+    name: string;
+    role: string;
+  };
+}
+
 interface AgreementDetails {
   id: string;
   clientName: string;
@@ -75,6 +87,7 @@ export default function AgreementDetailsPage() {
   const [error, setError] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
   const [remarks, setRemarks] = useState<Remark[]>([]);
+  const [history, setHistory] = useState<HistoryLog[]>([]);
   const [newRemark, setNewRemark] = useState("");
   const [isSubmittingRemark, setIsSubmittingRemark] = useState(false);
 
@@ -106,6 +119,15 @@ export default function AgreementDetailsPage() {
       if (remarksRes.ok) {
         const remarksData = await remarksRes.json();
         setRemarks(remarksData);
+      }
+
+      // Fetch history
+      const historyRes = await fetch(`http://localhost:5000/api/agreements/${id}/history`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (historyRes.ok) {
+        const historyData = await historyRes.json();
+        setHistory(historyData);
       }
     } catch (err: any) {
       setError(err.message);
@@ -445,7 +467,58 @@ export default function AgreementDetailsPage() {
               </div>
             </CardContent>
           </Card>
-          <PlaceholderCard title="History" />
+          {/* History Section */}
+          <Card className="col-span-1 md:col-span-2 lg:col-span-3">
+            <CardHeader>
+              <CardTitle className="text-lg">History Timeline</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                {history.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No activity has been recorded yet.</p>
+                ) : (
+                  <div className="relative border-l-2 border-gray-200 dark:border-gray-800 pl-6 ml-3">
+                    {history.map((log, index) => (
+                      <div key={log.id} className="mb-6 relative">
+                        {/* Timeline dot */}
+                        <div className="absolute w-3 h-3 bg-primary rounded-full -left-[31px] top-1.5" />
+                        
+                        <div className="flex flex-col space-y-1">
+                          <div className="flex items-center space-x-2">
+                            <span className="text-sm font-semibold">{log.actor.name}</span>
+                            <Badge variant="outline" className="text-[10px] h-4 px-1">{log.actor.role}</Badge>
+                          </div>
+                          
+                          <p className="text-sm font-medium">{
+                            log.action === "STATUS_CHANGE" ? "Changed Review Status" :
+                            log.action === "DRAFT_UPLOADED" ? "Uploaded Draft" :
+                            log.action === "REMARK_ADDED" ? "Added Remark" :
+                            log.action === "AGREEMENT_CREATED" ? "Created Agreement" :
+                            log.action
+                          }</p>
+                          
+                          {log.details && (
+                            <p className="text-sm text-muted-foreground">{log.details}</p>
+                          )}
+                          
+                          <p className="text-xs text-muted-foreground pt-1">
+                            {new Date(log.timestamp).toLocaleDateString("en-GB", {
+                              day: "2-digit",
+                              month: "short",
+                              year: "numeric",
+                            })} • {new Date(log.timestamp).toLocaleTimeString("en-US", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
           {/* Drafts Section */}
           <Card className="col-span-1 md:col-span-2 lg:col-span-3">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
