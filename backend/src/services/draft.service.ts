@@ -60,13 +60,13 @@ export class DraftService {
         });
       }
 
-      // 2. Create History Log
+      // 2. Create history log
       await tx.historyLog.create({
         data: {
           agreementId: draft.agreementId,
+          action: "CLAUSE_REVIEW_COMPLETED",
+          details: `Legal reviewed clauses for Draft Version ${draft.version}`,
           actorId: userId,
-          action: "CLAUSE_REVIEW_UPDATED",
-          details: `${teamRole} reviewed clauses for Draft Version ${draft.version}.`,
         },
       });
     });
