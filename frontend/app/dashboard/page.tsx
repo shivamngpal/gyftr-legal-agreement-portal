@@ -44,7 +44,7 @@ interface Agreement {
   status: string;
   startDate: string;
   updatedAt: string;
-  reviewStatuses: ReviewStatus[];
+  drafts?: { reviewStatuses: ReviewStatus[] }[];
 }
 
 export default function DashboardPage() {
@@ -255,10 +255,10 @@ export default function DashboardPage() {
                   <TableCell>
                     <Badge variant="outline">{agreement.status}</Badge>
                   </TableCell>
-                  <TableCell>{getTeamStatus(agreement.reviewStatuses, "LEGAL")}</TableCell>
-                  <TableCell>{getTeamStatus(agreement.reviewStatuses, "FINANCE")}</TableCell>
-                  <TableCell>{getTeamStatus(agreement.reviewStatuses, "BUSINESS")}</TableCell>
-                  <TableCell>{getTeamStatus(agreement.reviewStatuses, "COMPLIANCE")}</TableCell>
+                  <TableCell>{getTeamStatus(agreement.drafts?.[0]?.reviewStatuses || [], "LEGAL")}</TableCell>
+                  <TableCell>{getTeamStatus(agreement.drafts?.[0]?.reviewStatuses || [], "FINANCE")}</TableCell>
+                  <TableCell>{getTeamStatus(agreement.drafts?.[0]?.reviewStatuses || [], "BUSINESS")}</TableCell>
+                  <TableCell>{getTeamStatus(agreement.drafts?.[0]?.reviewStatuses || [], "COMPLIANCE")}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

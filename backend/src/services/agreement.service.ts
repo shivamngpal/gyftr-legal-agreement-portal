@@ -39,11 +39,20 @@ export class AgreementService {
 
       const nextVersion = maxDraft ? maxDraft.version + 1 : 1;
 
+      const requiredRoles: Role[] = ["LEGAL", "FINANCE", "BUSINESS", "COMPLIANCE"];
+      const reviewStatusesData = requiredRoles.map((role) => ({
+        team: role,
+        status: "PENDING" as const,
+      }));
+
       const draft = await tx.draft.create({
         data: {
           agreementId,
           version: nextVersion,
           fileUrl,
+          reviewStatuses: {
+            create: reviewStatusesData,
+          },
         },
       });
 
@@ -88,12 +97,6 @@ export class AgreementService {
   }
 
   static async createAgreement(data: CreateAgreementRequest, actorId: string) {
-    const requiredRoles: Role[] = ["LEGAL", "FINANCE", "BUSINESS", "COMPLIANCE"];
-    const reviewStatusesData = requiredRoles.map((role) => ({
-      team: role,
-      status: "PENDING" as const,
-    }));
-
     return await prisma.$transaction(async (tx) => {
       const agreement = await tx.agreement.create({
         data: {
@@ -105,12 +108,6 @@ export class AgreementService {
           financeSpocId: data.financeSpocId,
           businessSpocId: data.businessSpocId,
           complianceSpocId: data.complianceSpocId,
-          reviewStatuses: {
-            create: reviewStatusesData,
-          },
-        },
-        include: {
-          reviewStatuses: true,
         },
       });
 
@@ -140,8 +137,13 @@ export class AgreementService {
         financeSpoc: { select: { id: true, name: true, email: true } },
         businessSpoc: { select: { id: true, name: true, email: true } },
         complianceSpoc: { select: { id: true, name: true, email: true } },
-        reviewStatuses: {
-          select: { team: true, status: true, updatedAt: true }
+        drafts: {
+          orderBy: { version: "desc" },
+          include: {
+            reviewStatuses: {
+              select: { team: true, status: true, updatedAt: true }
+            }
+          }
         }
       },
       orderBy: { updatedAt: "desc" },
@@ -156,8 +158,12 @@ export class AgreementService {
         financeSpoc: { select: { id: true, name: true, email: true, role: true } },
         businessSpoc: { select: { id: true, name: true, email: true, role: true } },
         complianceSpoc: { select: { id: true, name: true, email: true, role: true } },
-        reviewStatuses: true,
-        drafts: { orderBy: { version: "desc" } },
+        drafts: { 
+          orderBy: { version: "desc" },
+          include: {
+            reviewStatuses: true
+          }
+        },
       },
     });
 
@@ -175,11 +181,18 @@ export class AgreementService {
   }
 
   static async updateReviewStatus(agreementId: string, team: Role, newStatus: "PENDING" | "UNDER_REVIEW" | "APPROVED" | "REJECTED", actorId: string) {
-    const reviewStatus = await prisma.reviewStatus.findUnique({
-      where: { agreementId_team: { agreementId, team } },
+    const maxDraft = await prisma.draft.findFirst({
+      where: { agreementId },
+      orderBy: { version: "desc" },
     });
 
-    if (!reviewStatus) throw new Error("Review status not found");
+    if (!maxDraft) throw new Error("No drafts found for this agreement");
+
+    const reviewStatus = await prisma.reviewStatus.findUnique({
+      where: { draftId_team: { draftId: maxDraft.id, team } },
+    });
+
+    if (!reviewStatus) throw new Error("Review status not found for the current draft");
 
     const validTransitions: Record<string, string[]> = {
       PENDING: ["UNDER_REVIEW"],

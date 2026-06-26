@@ -37,6 +37,7 @@ interface Draft {
   version: number;
   fileUrl: string;
   createdAt: string;
+  reviewStatuses?: ReviewStatus[];
 }
 
 interface Remark {
@@ -81,7 +82,6 @@ interface AgreementDetails {
   financeSpoc: Spoc | null;
   businessSpoc: Spoc | null;
   complianceSpoc: Spoc | null;
-  reviewStatuses: ReviewStatus[];
   drafts: Draft[];
 }
 
@@ -93,12 +93,6 @@ export default function AgreementDetailsPage() {
   const [agreement, setAgreement] = useState<AgreementDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isUpdating, setIsUpdating] = useState<string | null>(null);
-  const [remarks, setRemarks] = useState<Remark[]>([]);
-  const [history, setHistory] = useState<HistoryLog[]>([]);
-  const [clauses, setClauses] = useState<Clause[]>([]);
-  const [newRemark, setNewRemark] = useState("");
-  const [isSubmittingRemark, setIsSubmittingRemark] = useState(false);
 
   const fetchAgreement = useCallback(async () => {
     if (!token) return;
@@ -120,40 +114,6 @@ export default function AgreementDetailsPage() {
       
       const data = await res.json();
       setAgreement(data);
-
-      // Fetch remarks
-      const remarksRes = await fetch(`http://localhost:5000/api/agreements/${id}/remarks`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (remarksRes.ok) {
-        const remarksData = await remarksRes.json();
-        setRemarks(remarksData);
-      }
-
-      // Fetch history
-      const historyRes = await fetch(`http://localhost:5000/api/agreements/${id}/history`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (historyRes.ok) {
-        const historyData = await historyRes.json();
-        setHistory(historyData);
-      }
-
-      // Fetch clauses for the latest draft
-      if (data.drafts && data.drafts.length > 0) {
-        const latestDraftId = data.drafts[0].id;
-        const clausesRes = await fetch(`http://localhost:5000/api/drafts/${latestDraftId}/clauses`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (clausesRes.ok) {
-          const clausesData = await clausesRes.json();
-          setClauses(clausesData);
-        } else {
-          setClauses([]);
-        }
-      } else {
-        setClauses([]);
-      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -164,61 +124,6 @@ export default function AgreementDetailsPage() {
   useEffect(() => {
     fetchAgreement();
   }, [fetchAgreement]);
-
-  const handleStatusUpdate = async (team: string, newStatus: string) => {
-    if (!token) return;
-    setIsUpdating(team);
-    try {
-      const res = await fetch(`http://localhost:5000/api/agreements/${id}/review`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ status: newStatus }),
-      });
-      
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.message || data.error || "Failed to update review status");
-      }
-      
-      toast.success(`${team} status updated to ${newStatus}`);
-      fetchAgreement();
-    } catch (err: any) {
-      toast.error(err.message);
-    } finally {
-      setIsUpdating(null);
-    }
-  };
-
-  const handleAddRemark = async () => {
-    if (!newRemark.trim() || !token) return;
-    setIsSubmittingRemark(true);
-    try {
-      const res = await fetch(`http://localhost:5000/api/agreements/${id}/remarks`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ message: newRemark }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.message || data.error || "Failed to add remark");
-      }
-
-      toast.success("Remark added successfully");
-      setNewRemark("");
-      fetchAgreement();
-    } catch (err: any) {
-      toast.error(err.message);
-    } finally {
-      setIsSubmittingRemark(false);
-    }
-  };
 
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -261,16 +166,6 @@ export default function AgreementDetailsPage() {
         fileInputRef.current.value = "";
       }
     }
-  };
-
-  const getTeamStatusBadge = (statuses: ReviewStatus[], team: string) => {
-    const status = statuses.find((s) => s.team === team)?.status || "N/A";
-    let badgeVariant: "default" | "secondary" | "destructive" | "outline" = "outline";
-    if (status === "APPROVED") badgeVariant = "default";
-    if (status === "REJECTED") badgeVariant = "destructive";
-    if (status === "PENDING") badgeVariant = "secondary";
-    if (status === "UNDER_REVIEW") badgeVariant = "outline";
-    return <Badge variant={badgeVariant}>{status}</Badge>;
   };
 
   const getSpocDisplay = (spoc: Spoc | null) => {
@@ -396,241 +291,62 @@ export default function AgreementDetailsPage() {
           </CardContent>
         </Card>
 
-        {/* Review Statuses */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Team Review Status</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {["LEGAL", "FINANCE", "BUSINESS", "COMPLIANCE"].map((team) => {
-              const statusObj = agreement.reviewStatuses.find((s) => s.team === team);
-              const status = statusObj?.status || "N/A";
-              
-              const isOwnTeam = user?.role === team;
-              const canUpdate = isOwnTeam && status !== "APPROVED" && status !== "REJECTED";
-
-              return (
-                <div key={team} className="flex items-center justify-between">
-                  <p className="text-sm font-medium capitalize">{team.toLowerCase()} Review</p>
-                  {canUpdate ? (
-                    <Select
-                      disabled={isUpdating === team}
-                      value={status}
-                      onValueChange={(val) => handleStatusUpdate(team, val || "")}
-                    >
-                      <SelectTrigger className="w-[140px] h-8 text-xs">
-                        <SelectValue placeholder="Update Status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {status === "PENDING" && (
-                          <SelectItem value="UNDER_REVIEW">Start Review</SelectItem>
-                        )}
-                        {status === "UNDER_REVIEW" && (
-                          <>
-                            <SelectItem value="APPROVED">Approve</SelectItem>
-                            <SelectItem value="REJECTED">Reject</SelectItem>
-                          </>
-                        )}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    getTeamStatusBadge(agreement.reviewStatuses, team)
-                  )}
-                </div>
-              );
-            })}
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="mt-8">
-        <h3 className="text-xl font-bold tracking-tight mb-4">Workspace Modules</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* Remarks Section */}
-          <Card className="col-span-1 md:col-span-2 lg:col-span-3">
-            <CardHeader>
-              <CardTitle className="text-lg">Remarks & Discussion</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4 max-h-[300px] overflow-y-auto mb-4 p-1">
-                {remarks.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No remarks yet.</p>
-                ) : (
-                  remarks.map((remark) => (
-                    <div key={remark.id} className="p-3 border rounded-md bg-gray-50/50">
-                      <div className="flex items-center justify-between mb-1">
-                        <div className="flex items-center space-x-2">
-                          <p className="text-sm font-semibold">{remark.author.name}</p>
-                          <Badge variant="outline" className="text-[10px] h-4 px-1">{remark.author.role}</Badge>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(remark.createdAt).toLocaleString()}
-                        </p>
-                      </div>
-                      <p className="text-sm whitespace-pre-wrap">{remark.message}</p>
-                    </div>
-                  ))
-                )}
-              </div>
-              <div className="pt-2 border-t mt-4 flex flex-col space-y-2">
-                <textarea
-                  className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  placeholder="Add a remark..."
-                  value={newRemark}
-                  onChange={(e) => setNewRemark(e.target.value)}
-                  disabled={isSubmittingRemark}
+        {/* Drafts Section */}
+        <Card className="col-span-1 md:col-span-2 lg:col-span-3">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-lg">Drafts</CardTitle>
+            {user?.role === "LEGAL" && (
+              <div>
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  ref={fileInputRef}
+                  className="hidden"
+                  onChange={handleFileUpload}
                 />
-                <div className="flex justify-end">
-                  <Button 
-                    onClick={handleAddRemark} 
-                    disabled={isSubmittingRemark || !newRemark.trim()}
-                    size="sm"
-                  >
-                    {isSubmittingRemark ? "Submitting..." : "Submit Remark"}
-                  </Button>
-                </div>
+                <Button
+                  size="sm"
+                  disabled={isUploading}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {isUploading ? "Uploading..." : "Upload Draft"}
+                </Button>
               </div>
-            </CardContent>
-          </Card>
-          {/* History Section */}
-          <Card className="col-span-1 md:col-span-2 lg:col-span-3">
-            <CardHeader>
-              <CardTitle className="text-lg">History Timeline</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                {history.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No activity has been recorded yet.</p>
-                ) : (
-                  <div className="relative border-l-2 border-gray-200 dark:border-gray-800 pl-6 ml-3">
-                    {history.map((log, index) => (
-                      <div key={log.id} className="mb-6 relative">
-                        {/* Timeline dot */}
-                        <div className="absolute w-3 h-3 bg-primary rounded-full -left-[31px] top-1.5" />
-                        
-                        <div className="flex flex-col space-y-1">
-                          <div className="flex items-center space-x-2">
-                            <span className="text-sm font-semibold">{log.actor.name}</span>
-                            <Badge variant="outline" className="text-[10px] h-4 px-1">{log.actor.role}</Badge>
-                          </div>
-                          
-                          <p className="text-sm font-medium">{
-                            log.action === "STATUS_CHANGE" ? "Changed Review Status" :
-                            log.action === "DRAFT_UPLOADED" ? "Uploaded Draft" :
-                            log.action === "REMARK_ADDED" ? "Added Remark" :
-                            log.action === "AGREEMENT_CREATED" ? "Created Agreement" :
-                            log.action
-                          }</p>
-                          
-                          {log.details && (
-                            <p className="text-sm text-muted-foreground">{log.details}</p>
-                          )}
-                          
-                          <p className="text-xs text-muted-foreground pt-1">
-                            {new Date(log.timestamp).toLocaleDateString("en-GB", {
-                              day: "2-digit",
-                              month: "short",
-                              year: "numeric",
-                            })} • {new Date(log.timestamp).toLocaleTimeString("en-US", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-          {/* Drafts Section */}
-          <Card className="col-span-1 md:col-span-2 lg:col-span-3">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-lg">Drafts</CardTitle>
-              {user?.role === "LEGAL" && (
-                <div>
-                  <input
-                    type="file"
-                    accept="application/pdf"
-                    ref={fileInputRef}
-                    className="hidden"
-                    onChange={handleFileUpload}
-                  />
-                  <Button
-                    size="sm"
-                    disabled={isUploading}
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    {isUploading ? "Uploading..." : "Upload Draft"}
-                  </Button>
-                </div>
-              )}
-            </CardHeader>
-            <CardContent>
-              {(!agreement.drafts || agreement.drafts.length === 0) ? (
-                <p className="text-sm text-muted-foreground">No drafts uploaded yet.</p>
-              ) : (
-                <div className="space-y-4 mt-4">
-                  {agreement.drafts.map((draft) => (
-                    <div key={draft.id} className="flex items-center justify-between p-3 border rounded-md">
+            )}
+          </CardHeader>
+          <CardContent>
+            {(!agreement.drafts || agreement.drafts.length === 0) ? (
+              <p className="text-sm text-muted-foreground">No drafts uploaded yet.</p>
+            ) : (
+              <div className="space-y-4 mt-4">
+                {agreement.drafts.map((draft) => {
+                  return (
+                    <div 
+                      key={draft.id} 
+                      className="flex items-center justify-between p-3 border rounded-md hover:bg-slate-50 transition-colors"
+                    >
                       <div>
-                        <p className="text-sm font-medium">Version {draft.version}</p>
-                        <p className="text-xs text-muted-foreground">
+                        <div className="flex items-center space-x-2">
+                          <p className="text-sm font-semibold">Version {draft.version}</p>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">
                           Uploaded on {new Date(draft.createdAt).toLocaleString()}
                         </p>
                       </div>
-                      <a href={draft.fileUrl} target="_blank" rel="noopener noreferrer">
-                        <Button variant="outline" size="sm">
-                          View PDF
-                        </Button>
-                      </a>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-          {/* Clause Analysis Section */}
-          <Card className="col-span-1 md:col-span-2 lg:col-span-3">
-            <CardHeader>
-              <CardTitle className="text-lg">Clause Analysis</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {(!agreement.drafts || agreement.drafts.length === 0) ? (
-                  <p className="text-sm text-muted-foreground">Upload a draft before reviewing clauses.</p>
-                ) : clauses.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No clauses are available for this draft.</p>
-                ) : (
-                  clauses.map((clause) => (
-                    <div key={clause.id} className="p-4 border rounded-md">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-semibold text-sm">{clause.identifier}</h4>
-                        <Badge 
-                          variant={clause.outcome === "ACCEPTED" ? "default" : clause.outcome === "REJECTED" ? "destructive" : "outline"}
-                        >
-                          {clause.outcome}
-                        </Badge>
+                      <div className="flex space-x-2">
+                        <Link href={`/agreements/${id}/drafts/${draft.id}`}>
+                          <Button size="sm">
+                            View Workspace
+                          </Button>
+                        </Link>
                       </div>
-                      <p className="text-sm text-gray-700 dark:text-gray-300 mb-3 whitespace-pre-wrap">
-                        {clause.text}
-                      </p>
-                      {clause.comments && (
-                        <div className="bg-gray-50 dark:bg-gray-900 p-2 rounded text-xs text-muted-foreground border">
-                          <span className="font-semibold">Comments: </span>
-                          {clause.comments}
-                        </div>
-                      )}
                     </div>
-                  ))
-                )}
+                  );
+                })}
               </div>
-            </CardContent>
-          </Card>
-          <PlaceholderCard title="Reminders" />
-          <PlaceholderCard title="Sign-off" />
-        </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

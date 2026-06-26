@@ -85,7 +85,6 @@ model Agreement {
   complianceSpocId String?
   complianceSpoc   User?   @relation("ComplianceSpoc", fields: [complianceSpocId], references: [id])
 
-  reviewStatuses ReviewStatus[]
   remarks        Remark[]
   historyLogs    HistoryLog[]
   drafts         Draft[]
@@ -95,13 +94,13 @@ model Agreement {
 
 model ReviewStatus {
   id          String           @id @default(uuid())
-  agreementId String
-  agreement   Agreement        @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  draftId     String
+  draft       Draft            @relation(fields: [draftId], references: [id], onDelete: Cascade)
   team        Role
   status      ReviewStatusEnum @default(PENDING)
   updatedAt   DateTime         @updatedAt
 
-  @@unique([agreementId, team])
+  @@unique([draftId, team])
 }
 
 model Remark {
@@ -133,7 +132,8 @@ model Draft {
   fileUrl     String // S3 URL
   createdAt   DateTime  @default(now())
 
-  clauses Clause[]
+  clauses        Clause[]
+  reviewStatuses ReviewStatus[]
 }
 
 model Clause {
