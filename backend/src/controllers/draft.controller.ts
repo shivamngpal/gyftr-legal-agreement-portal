@@ -43,3 +43,22 @@ export const updateClauses = async (req: Request, res: Response): Promise<void> 
     res.status(500).json({ error: "Internal server error", message: error?.message });
   }
 };
+
+export const getComparison = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { draftId } = draftIdSchema.parse(req.params);
+    const result = await DraftService.getComparison(draftId);
+    res.json(result);
+  } catch (error: any) {
+    if (error instanceof z.ZodError || error?.name === "ZodError") {
+      res.status(400).json({ error: "Validation error", details: error.errors });
+      return;
+    }
+    if (error.message === "Draft not found") {
+      res.status(404).json({ error: "Draft not found" });
+      return;
+    }
+    console.error("Get Comparison Error:", error);
+    res.status(500).json({ error: "Internal server error", message: error?.message });
+  }
+};

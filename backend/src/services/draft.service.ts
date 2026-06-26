@@ -73,4 +73,70 @@ export class DraftService {
 
     return { message: "Clauses updated successfully" };
   }
+
+  static async getComparison(draftId: string) {
+    // 1. Load the current Draft
+    const currentDraft = await prisma.draft.findUnique({
+      where: { id: draftId },
+      include: { clauses: true },
+    });
+    
+    if (!currentDraft) {
+      throw new Error("Draft not found");
+    }
+
+    // Sort current clauses
+    currentDraft.clauses.sort((a, b) => 
+      a.identifier.localeCompare(b.identifier, undefined, { numeric: true, sensitivity: 'base' })
+    );
+
+    // 2. Determine previous draft
+    if (currentDraft.version === 1) {
+      return {
+        previousDraft: null,
+        currentDraft,
+        comparisons: [],
+      };
+    }
+
+    const previousDraft = await prisma.draft.findFirst({
+      where: {
+        agreementId: currentDraft.agreementId,
+        version: currentDraft.version - 1,
+      },
+      include: { clauses: true },
+    });
+
+    if (!previousDraft) {
+      return {
+        previousDraft: null,
+        currentDraft,
+        comparisons: [],
+      };
+    }
+
+    // 3. Match Clauses
+    const comparisons: { previousClause: any | null, currentClause: any }[] = [];
+
+    // Map for O(1) lookup
+    const previousClausesMap = new Map();
+    for (const pc of previousDraft.clauses) {
+      // exact match on identifier
+      previousClausesMap.set(pc.identifier, pc);
+    }
+
+    for (const currentClause of currentDraft.clauses) {
+      const previousClause = previousClausesMap.get(currentClause.identifier) || null;
+      comparisons.push({
+        previousClause,
+        currentClause,
+      });
+    }
+
+    return {
+      previousDraft,
+      currentDraft,
+      comparisons,
+    };
+  }
 }

@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import * as diff from "diff";
 
 interface Spoc {
   id: string;
@@ -71,6 +72,15 @@ interface Clause {
   comments: string | null;
 }
 
+interface ComparisonData {
+  previousDraft: Draft | null;
+  currentDraft: Draft;
+  comparisons: {
+    previousClause: Clause | null;
+    currentClause: Clause;
+  }[];
+}
+
 interface AgreementDetails {
   id: string;
   clientName: string;
@@ -84,6 +94,26 @@ interface AgreementDetails {
   complianceSpoc: Spoc | null;
   drafts: Draft[];
 }
+
+const renderLeftDiff = (oldText: string, newText: string) => {
+  const diffs = diff.diffWords(oldText || "", newText || "");
+  return diffs.filter(part => !part.added).map((part, idx) => {
+    if (part.removed) {
+      return <span key={idx} className="bg-red-200 dark:bg-red-900/40 text-red-900 dark:text-red-200 rounded px-1">{part.value}</span>;
+    }
+    return <span key={idx}>{part.value}</span>;
+  });
+};
+
+const renderRightDiff = (oldText: string, newText: string) => {
+  const diffs = diff.diffWords(oldText || "", newText || "");
+  return diffs.filter(part => !part.removed).map((part, idx) => {
+    if (part.added) {
+      return <span key={idx} className="bg-green-200 dark:bg-green-900/40 text-green-900 dark:text-green-200 rounded px-1">{part.value}</span>;
+    }
+    return <span key={idx}>{part.value}</span>;
+  });
+};
 
 export default function DraftWorkspacePage() {
   const { id, draftId } = useParams() as { id: string, draftId: string };
@@ -175,6 +205,36 @@ export default function DraftWorkspacePage() {
   useEffect(() => {
     fetchClauses();
   }, [fetchClauses]);
+
+  const [comparisonData, setComparisonData] = useState<ComparisonData | null>(null);
+  const [loadingComparison, setLoadingComparison] = useState(false);
+
+  const fetchComparison = useCallback(async () => {
+    if (!token || !selectedDraftId || user?.role !== "LEGAL") {
+      setComparisonData(null);
+      return;
+    }
+    setLoadingComparison(true);
+    try {
+      const res = await fetch(`http://localhost:5000/api/drafts/${selectedDraftId}/compare`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setComparisonData(data);
+      } else {
+        setComparisonData(null);
+      }
+    } catch {
+      setComparisonData(null);
+    } finally {
+      setLoadingComparison(false);
+    }
+  }, [token, selectedDraftId, user?.role]);
+
+  useEffect(() => {
+    fetchComparison();
+  }, [fetchComparison]);
 
   const handleStatusUpdate = async (team: string, newStatus: string) => {
     if (!token) return;
@@ -512,67 +572,122 @@ export default function DraftWorkspacePage() {
               </div>
             </CardContent>
           </Card>
-          {/* Clause Analysis Section */}
-          <Card className="col-span-1 md:col-span-2 lg:col-span-3">
-            <CardHeader>
-              <CardTitle className="text-lg">Clause Analysis</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                {(!agreement.drafts || agreement.drafts.length === 0) ? (
-                  <p className="text-sm text-muted-foreground">Upload a draft before reviewing clauses.</p>
-                ) : clauses.length === 0 ? (
+          {user?.role === "LEGAL" ? (
+            <Card className="col-span-1 md:col-span-2 lg:col-span-3">
+              <CardHeader>
+                <CardTitle className="text-lg">Clause Comparison</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loadingComparison ? (
+                  <div className="space-y-4">
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-24 w-full" />
+                  </div>
+                ) : !comparisonData ? (
+                  <p className="text-sm text-muted-foreground">Unable to load comparison data.</p>
+                ) : comparisonData.currentDraft.version === 1 ? (
+                  <p className="text-sm text-muted-foreground">No previous draft available for comparison.</p>
+                ) : comparisonData.comparisons.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No clauses are available for this draft.</p>
                 ) : (
-                  <>
-                    {clauses.map((clause) => {
-                      const currentOutcome = editedClauses[clause.id]?.outcome || clause.outcome;
-                      const currentComments = editedClauses[clause.id]?.comments ?? (clause.comments || "");
-                      
-                      return (
-                        <div key={clause.id} className="p-4 border rounded-md">
-                          <div className="flex items-start justify-between mb-2">
-                            <h4 className="font-semibold text-sm">{clause.identifier}</h4>
-                            <Select
-                              value={currentOutcome}
-                              onValueChange={(val) => handleClauseChange(clause.id, "outcome", val as string)}
-                            >
-                              <SelectTrigger className="w-[120px] h-8 text-xs">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="PENDING">Pending</SelectItem>
-                                <SelectItem value="ACCEPTED">Accepted</SelectItem>
-                                <SelectItem value="PARTIAL">Partial</SelectItem>
-                                <SelectItem value="HELD">Held</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <p className="text-sm text-gray-700 dark:text-gray-300 mb-4 whitespace-pre-wrap">
-                            {clause.text}
-                          </p>
-                          <textarea
-                            className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                            placeholder="Add comments for this clause..."
-                            value={currentComments}
-                            onChange={(e) => handleClauseChange(clause.id, "comments", e.target.value)}
-                          />
+                  <div className="space-y-6">
+                    {comparisonData.comparisons.map((comp, idx) => (
+                      <div key={idx} className="border rounded-md overflow-hidden">
+                        <div className="bg-gray-50 dark:bg-gray-900 border-b px-4 py-2">
+                          <h4 className="font-semibold text-sm">{comp.currentClause.identifier}</h4>
                         </div>
-                      );
-                    })}
-                    <div className="flex justify-end pt-4 border-t mt-4">
-                      <Button 
-                        onClick={handleSaveClauseReview}
-                        disabled={Object.keys(editedClauses).length === 0 || isSavingClauses}
-                      >
-                        {isSavingClauses ? "Saving..." : "Save Clause Review"}
-                      </Button>
-                    </div>
-                  </>
+                        <div className="grid grid-cols-2 divide-x">
+                          <div className="p-4">
+                            <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase">
+                              Previous Draft (V{comparisonData.previousDraft?.version})
+                            </p>
+                            {comp.previousClause ? (
+                              <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
+                                {renderLeftDiff(comp.previousClause.text, comp.currentClause.text)}
+                              </p>
+                            ) : (
+                              <p className="text-sm text-muted-foreground italic">Clause not present in previous draft.</p>
+                            )}
+                          </div>
+                          <div className="p-4">
+                            <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase">
+                              Current Draft (V{comparisonData.currentDraft.version})
+                            </p>
+                            <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
+                              {comp.previousClause 
+                                ? renderRightDiff(comp.previousClause.text, comp.currentClause.text)
+                                : comp.currentClause.text}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 )}
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="col-span-1 md:col-span-2 lg:col-span-3">
+              <CardHeader>
+                <CardTitle className="text-lg">Clause Analysis</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-6">
+                  {(!agreement.drafts || agreement.drafts.length === 0) ? (
+                    <p className="text-sm text-muted-foreground">Upload a draft before reviewing clauses.</p>
+                  ) : clauses.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No clauses are available for this draft.</p>
+                  ) : (
+                    <>
+                      {clauses.map((clause) => {
+                        const currentOutcome = editedClauses[clause.id]?.outcome || clause.outcome;
+                        const currentComments = editedClauses[clause.id]?.comments ?? (clause.comments || "");
+                        
+                        return (
+                          <div key={clause.id} className="p-4 border rounded-md">
+                            <div className="flex items-start justify-between mb-2">
+                              <h4 className="font-semibold text-sm">{clause.identifier}</h4>
+                              <Select
+                                value={currentOutcome}
+                                onValueChange={(val) => handleClauseChange(clause.id, "outcome", val as string)}
+                              >
+                                <SelectTrigger className="w-[120px] h-8 text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="PENDING">Pending</SelectItem>
+                                  <SelectItem value="ACCEPTED">Accepted</SelectItem>
+                                  <SelectItem value="PARTIAL">Partial</SelectItem>
+                                  <SelectItem value="HELD">Held</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <p className="text-sm text-gray-700 dark:text-gray-300 mb-4 whitespace-pre-wrap">
+                              {clause.text}
+                            </p>
+                            <textarea
+                              className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                              placeholder="Add comments for this clause..."
+                              value={currentComments}
+                              onChange={(e) => handleClauseChange(clause.id, "comments", e.target.value)}
+                            />
+                          </div>
+                        );
+                      })}
+                      <div className="flex justify-end pt-4 border-t mt-4">
+                        <Button 
+                          onClick={handleSaveClauseReview}
+                          disabled={Object.keys(editedClauses).length === 0 || isSavingClauses}
+                        >
+                          {isSavingClauses ? "Saving..." : "Save Clause Review"}
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
           <PlaceholderCard title="Reminders" />
           <PlaceholderCard title="Sign-off" />
         </div>
