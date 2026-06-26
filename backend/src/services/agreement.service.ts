@@ -2,14 +2,33 @@ import { prisma } from "../config/db";
 import { CreateAgreementRequest, UpdateAgreementRequest } from "../utils/validation";
 import { Role } from "../generated/prisma/enums";
 import { S3Service } from "./s3.service";
+import { AIService } from "./ai.service";
+import pdf from "pdf-parse";
 
 export class AgreementService {
   static async uploadDraft(agreementId: string, fileBuffer: Buffer, fileName: string, actorId: string) {
     const agreement = await prisma.agreement.findUnique({ where: { id: agreementId } });
     if (!agreement) throw new Error("Agreement not found");
 
-    // Upload to S3
+    // 1. Extract text from PDF
+    let pdfText = "";
+    try {
+      const pdfData = await pdf(fileBuffer);
+      pdfText = pdfData.text;
+    } catch (err) {
+      console.error("PDF Parse Error details:", err);
+      throw new Error("Could not extract text from PDF");
+    }
+
+    if (!pdfText || pdfText.trim() === "") {
+      throw new Error("Could not extract text from PDF. The document may be empty or scanned.");
+    }
+
+    // 2. Upload to S3
     const fileUrl = await S3Service.uploadPdf(fileBuffer, fileName, agreementId);
+
+    // 3. Extract Clauses via AI
+    const extractedClauses = await AIService.extractClauses(pdfText);
 
     return await prisma.$transaction(async (tx) => {
       // Get max version
@@ -28,6 +47,20 @@ export class AgreementService {
         },
       });
 
+      // Insert Clauses
+      if (extractedClauses.length > 0) {
+        await tx.clause.createMany({
+          data: extractedClauses.map((c) => ({
+            draftId: draft.id,
+            identifier: c.identifier || "Unknown",
+            text: c.text || "",
+            outcome: "PENDING",
+            comments: null,
+          })),
+        });
+      }
+
+      // History Log: Draft Uploaded
       await tx.historyLog.create({
         data: {
           agreementId,
@@ -37,7 +70,20 @@ export class AgreementService {
         },
       });
 
+      // History Log: AI Extraction
+      await tx.historyLog.create({
+        data: {
+          agreementId,
+          actorId,
+          action: "CLAUSES_EXTRACTED",
+          details: `AI extracted ${extractedClauses.length} clauses from Draft Version ${nextVersion}`,
+        },
+      });
+
       return draft;
+    }, {
+      maxWait: 10000,
+      timeout: 30000,
     });
   }
 

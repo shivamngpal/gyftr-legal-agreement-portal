@@ -62,6 +62,14 @@ interface HistoryLog {
   };
 }
 
+interface Clause {
+  id: string;
+  identifier: string;
+  text: string;
+  outcome: string;
+  comments: string | null;
+}
+
 interface AgreementDetails {
   id: string;
   clientName: string;
@@ -88,6 +96,7 @@ export default function AgreementDetailsPage() {
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
   const [remarks, setRemarks] = useState<Remark[]>([]);
   const [history, setHistory] = useState<HistoryLog[]>([]);
+  const [clauses, setClauses] = useState<Clause[]>([]);
   const [newRemark, setNewRemark] = useState("");
   const [isSubmittingRemark, setIsSubmittingRemark] = useState(false);
 
@@ -128,6 +137,22 @@ export default function AgreementDetailsPage() {
       if (historyRes.ok) {
         const historyData = await historyRes.json();
         setHistory(historyData);
+      }
+
+      // Fetch clauses for the latest draft
+      if (data.drafts && data.drafts.length > 0) {
+        const latestDraftId = data.drafts[0].id;
+        const clausesRes = await fetch(`http://localhost:5000/api/drafts/${latestDraftId}/clauses`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (clausesRes.ok) {
+          const clausesData = await clausesRes.json();
+          setClauses(clausesData);
+        } else {
+          setClauses([]);
+        }
+      } else {
+        setClauses([]);
       }
     } catch (err: any) {
       setError(err.message);
@@ -566,7 +591,43 @@ export default function AgreementDetailsPage() {
               )}
             </CardContent>
           </Card>
-          <PlaceholderCard title="Clause Analysis" />
+          {/* Clause Analysis Section */}
+          <Card className="col-span-1 md:col-span-2 lg:col-span-3">
+            <CardHeader>
+              <CardTitle className="text-lg">Clause Analysis</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {(!agreement.drafts || agreement.drafts.length === 0) ? (
+                  <p className="text-sm text-muted-foreground">Upload a draft before reviewing clauses.</p>
+                ) : clauses.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No clauses are available for this draft.</p>
+                ) : (
+                  clauses.map((clause) => (
+                    <div key={clause.id} className="p-4 border rounded-md">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-semibold text-sm">{clause.identifier}</h4>
+                        <Badge 
+                          variant={clause.outcome === "ACCEPTED" ? "default" : clause.outcome === "REJECTED" ? "destructive" : "outline"}
+                        >
+                          {clause.outcome}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-gray-700 dark:text-gray-300 mb-3 whitespace-pre-wrap">
+                        {clause.text}
+                      </p>
+                      {clause.comments && (
+                        <div className="bg-gray-50 dark:bg-gray-900 p-2 rounded text-xs text-muted-foreground border">
+                          <span className="font-semibold">Comments: </span>
+                          {clause.comments}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </CardContent>
+          </Card>
           <PlaceholderCard title="Reminders" />
           <PlaceholderCard title="Sign-off" />
         </div>

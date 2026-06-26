@@ -23,6 +23,10 @@ export const agreementIdSchema = z.object({
   id: z.string().uuid("Invalid agreement ID format"),
 });
 
+export const draftIdSchema = z.object({
+  draftId: z.string().uuid("Invalid draft ID format"),
+});
+
 export const updateAgreementSchema = createAgreementSchema.partial();
 
 export const updateReviewStatusSchema = z.object({
