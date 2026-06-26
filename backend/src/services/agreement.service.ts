@@ -126,23 +126,16 @@ export class AgreementService {
 
   static async getAllAgreements() {
     return await prisma.agreement.findMany({
-      select: {
-        id: true,
-        clientName: true,
-        type: true,
-        status: true,
-        startDate: true,
-        updatedAt: true,
+      include: {
         legalSpoc: { select: { id: true, name: true, email: true } },
         financeSpoc: { select: { id: true, name: true, email: true } },
         businessSpoc: { select: { id: true, name: true, email: true } },
         complianceSpoc: { select: { id: true, name: true, email: true } },
         drafts: {
           orderBy: { version: "desc" },
+          take: 1,
           include: {
-            reviewStatuses: {
-              select: { team: true, status: true, updatedAt: true }
-            }
+            reviewStatuses: true
           }
         }
       },
@@ -180,16 +173,21 @@ export class AgreementService {
     return { ...agreement, drafts: signedDrafts };
   }
 
-  static async updateReviewStatus(agreementId: string, team: Role, newStatus: "PENDING" | "UNDER_REVIEW" | "APPROVED" | "REJECTED", actorId: string) {
-    const maxDraft = await prisma.draft.findFirst({
-      where: { agreementId },
-      orderBy: { version: "desc" },
-    });
+  static async updateReviewStatus(agreementId: string, team: Role, newStatus: "PENDING" | "UNDER_REVIEW" | "APPROVED" | "REJECTED", actorId: string, draftId?: string) {
+    let targetDraftId = draftId;
 
-    if (!maxDraft) throw new Error("No drafts found for this agreement");
+    if (!targetDraftId) {
+      // Fallback: use the latest draft
+      const maxDraft = await prisma.draft.findFirst({
+        where: { agreementId },
+        orderBy: { version: "desc" },
+      });
+      if (!maxDraft) throw new Error("No drafts found for this agreement");
+      targetDraftId = maxDraft.id;
+    }
 
     const reviewStatus = await prisma.reviewStatus.findUnique({
-      where: { draftId_team: { draftId: maxDraft.id, team } },
+      where: { draftId_team: { draftId: targetDraftId, team } },
     });
 
     if (!reviewStatus) throw new Error("Review status not found for the current draft");
@@ -219,6 +217,43 @@ export class AgreementService {
           details: `${team} status changed from ${reviewStatus.status} to ${newStatus}`,
         },
       });
+
+      // Derive the overall Agreement status from the latest draft's review statuses
+      const latestDraft = await tx.draft.findFirst({
+        where: { agreementId },
+        orderBy: { version: "desc" },
+        include: { reviewStatuses: true },
+      });
+
+      if (latestDraft) {
+        const statuses = latestDraft.reviewStatuses.map(rs => rs.status);
+        let newAgreementStatus: "DRAFT" | "IN_REVIEW" | "PENDING_SIGNATURE" | "EXECUTED" | "CANCELLED" = "DRAFT";
+
+        if (statuses.length === 4 && statuses.every(s => s === "APPROVED")) {
+          newAgreementStatus = "PENDING_SIGNATURE";
+        } else if (statuses.some(s => s === "REJECTED")) {
+          newAgreementStatus = "IN_REVIEW";
+        } else if (statuses.some(s => s === "UNDER_REVIEW" || s === "APPROVED")) {
+          newAgreementStatus = "IN_REVIEW";
+        }
+
+        const agreement = await tx.agreement.findUnique({ where: { id: agreementId }, select: { status: true } });
+        if (agreement && agreement.status !== newAgreementStatus) {
+          await tx.agreement.update({
+            where: { id: agreementId },
+            data: { status: newAgreementStatus },
+          });
+
+          await tx.historyLog.create({
+            data: {
+              agreementId,
+              actorId,
+              action: "STATUS_CHANGE",
+              details: `Agreement status automatically changed from ${agreement.status} to ${newAgreementStatus}`,
+            },
+          });
+        }
+      }
 
       return updated;
     });

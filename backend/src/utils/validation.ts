@@ -33,6 +33,7 @@ export const updateReviewStatusSchema = z.object({
   status: z.enum(["PENDING", "UNDER_REVIEW", "APPROVED", "REJECTED"], {
     error: "Invalid review status",
   }),
+  draftId: z.string().uuid().optional(),
 });
 
 export const createRemarkSchema = z.object({

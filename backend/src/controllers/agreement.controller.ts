@@ -94,7 +94,7 @@ export const getAgreementById = async (req: Request, res: Response): Promise<voi
 export const updateReviewStatus = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = agreementIdSchema.parse(req.params);
-    const { status } = updateReviewStatusSchema.parse(req.body);
+    const { status, draftId } = updateReviewStatusSchema.parse(req.body);
     const userRole = (req as any).user?.role;
     const userId = (req as any).user?.userId;
 
@@ -103,7 +103,7 @@ export const updateReviewStatus = async (req: Request, res: Response): Promise<v
       return;
     }
 
-    const result = await AgreementService.updateReviewStatus(id, userRole as any, status, userId);
+    const result = await AgreementService.updateReviewStatus(id, userRole as any, status, userId, draftId);
     res.json(result);
   } catch (error: any) {
     if (error instanceof z.ZodError || error?.name === "ZodError") {

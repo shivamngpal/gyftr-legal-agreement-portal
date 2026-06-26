@@ -256,7 +256,7 @@ export default function DraftWorkspacePage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ status: newStatus }),
+        body: JSON.stringify({ status: newStatus, draftId: draftId }),
       });
       
       if (!res.ok) {
@@ -441,7 +441,7 @@ export default function DraftWorkspacePage() {
           </CardHeader>
           <CardContent className="space-y-4">
             {["LEGAL", "FINANCE", "BUSINESS", "COMPLIANCE"].map((team) => {
-              const currentReviewStatuses = agreement.drafts?.[0]?.reviewStatuses || [];
+              const currentReviewStatuses = currentDraft?.reviewStatuses || [];
               const statusObj = currentReviewStatuses.find((s) => s.team === team);
               const status = statusObj?.status || "N/A";
               
