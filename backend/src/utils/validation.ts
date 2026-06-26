@@ -39,6 +39,18 @@ export const createRemarkSchema = z.object({
   message: z.string().min(1, "Message cannot be empty"),
 });
 
+export const updateClausesSchema = z.object({
+  clauses: z.array(
+    z.object({
+      id: z.string().uuid("Invalid clause ID"),
+      outcome: z.enum(["PENDING", "ACCEPTED", "PARTIAL", "HELD"], {
+        error: "Invalid clause outcome",
+      }),
+      comments: z.string().nullable().optional(),
+    })
+  ).min(1, "At least one clause must be updated"),
+});
+
 export type LoginRequest = z.infer<typeof loginSchema>;
 export type CreateAgreementRequest = z.infer<typeof createAgreementSchema>;
 export type UpdateAgreementRequest = z.infer<typeof updateAgreementSchema>;

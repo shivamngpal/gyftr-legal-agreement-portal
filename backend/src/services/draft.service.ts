@@ -24,4 +24,53 @@ export class DraftService {
       a.identifier.localeCompare(b.identifier, undefined, { numeric: true, sensitivity: 'base' })
     );
   }
+
+  static async updateClauses(
+    draftId: string, 
+    userId: string, 
+    clauses: { id: string, outcome: any, comments?: string | null }[]
+  ) {
+    // Verify draft exists
+    const draft = await prisma.draft.findUnique({
+      where: { id: draftId },
+      include: { agreement: true },
+    });
+    if (!draft) {
+      throw new Error("Draft not found");
+    }
+
+    // Verify user exists and get role
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    const teamRole = user.role.charAt(0) + user.role.slice(1).toLowerCase(); // LEGAL -> Legal
+
+    // Execute updates in a transaction
+    await prisma.$transaction(async (tx) => {
+      // 1. Update all clauses
+      for (const clause of clauses) {
+        await tx.clause.update({
+          where: { id: clause.id },
+          data: {
+            outcome: clause.outcome,
+            comments: clause.comments,
+          },
+        });
+      }
+
+      // 2. Create History Log
+      await tx.historyLog.create({
+        data: {
+          agreementId: draft.agreementId,
+          actorId: userId,
+          action: "CLAUSE_REVIEW_UPDATED",
+          details: `${teamRole} reviewed clauses for Draft Version ${draft.version}.`,
+        },
+      });
+    });
+
+    return { message: "Clauses updated successfully" };
+  }
 }

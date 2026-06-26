@@ -99,6 +99,8 @@ export default function DraftWorkspacePage() {
   const [clauses, setClauses] = useState<Clause[]>([]);
   const [newRemark, setNewRemark] = useState("");
   const [isSubmittingRemark, setIsSubmittingRemark] = useState(false);
+  const [editedClauses, setEditedClauses] = useState<Record<string, { outcome: string, comments: string }>>({});
+  const [isSavingClauses, setIsSavingClauses] = useState(false);
   const selectedDraftId = draftId;
 
   const fetchAgreement = useCallback(async () => {
@@ -150,28 +152,29 @@ export default function DraftWorkspacePage() {
     fetchAgreement();
   }, [fetchAgreement]);
 
-  useEffect(() => {
+  const fetchClauses = useCallback(async () => {
     if (!token || !selectedDraftId) {
       setClauses([]);
       return;
     }
-    const fetchClauses = async () => {
-      try {
-        const res = await fetch(`http://localhost:5000/api/drafts/${selectedDraftId}/clauses`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setClauses(data);
-        } else {
-          setClauses([]);
-        }
-      } catch {
+    try {
+      const res = await fetch(`http://localhost:5000/api/drafts/${selectedDraftId}/clauses`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setClauses(data);
+      } else {
         setClauses([]);
       }
-    };
-    fetchClauses();
+    } catch {
+      setClauses([]);
+    }
   }, [token, selectedDraftId]);
+
+  useEffect(() => {
+    fetchClauses();
+  }, [fetchClauses]);
 
   const handleStatusUpdate = async (team: string, newStatus: string) => {
     if (!token) return;
@@ -225,6 +228,58 @@ export default function DraftWorkspacePage() {
       toast.error(err.message);
     } finally {
       setIsSubmittingRemark(false);
+    }
+  };
+
+  const handleClauseChange = (clauseId: string, field: "outcome" | "comments", value: string) => {
+    setEditedClauses((prev) => {
+      const existing = prev[clauseId] || { 
+        outcome: clauses.find(c => c.id === clauseId)?.outcome || "PENDING", 
+        comments: clauses.find(c => c.id === clauseId)?.comments || "" 
+      };
+      return {
+        ...prev,
+        [clauseId]: {
+          ...existing,
+          [field]: value
+        }
+      };
+    });
+  };
+
+  const handleSaveClauseReview = async () => {
+    if (!token || Object.keys(editedClauses).length === 0) return;
+    setIsSavingClauses(true);
+    
+    const payloadClauses = Object.entries(editedClauses).map(([id, data]) => ({
+      id,
+      outcome: data.outcome,
+      comments: data.comments || null
+    }));
+
+    try {
+      const res = await fetch(`http://localhost:5000/api/drafts/${draftId}/clauses`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ clauses: payloadClauses }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || data.error || "Failed to save clause review");
+      }
+
+      toast.success("Clause review saved successfully");
+      setEditedClauses({});
+      fetchAgreement(); // Refreshes history and remarks
+      fetchClauses(); // Refreshes clauses
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setIsSavingClauses(false);
     }
   };
 
@@ -463,33 +518,57 @@ export default function DraftWorkspacePage() {
               <CardTitle className="text-lg">Clause Analysis</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
+              <div className="space-y-6">
                 {(!agreement.drafts || agreement.drafts.length === 0) ? (
                   <p className="text-sm text-muted-foreground">Upload a draft before reviewing clauses.</p>
                 ) : clauses.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No clauses are available for this draft.</p>
                 ) : (
-                  clauses.map((clause) => (
-                    <div key={clause.id} className="p-4 border rounded-md">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-semibold text-sm">{clause.identifier}</h4>
-                        <Badge 
-                          variant={clause.outcome === "ACCEPTED" ? "default" : clause.outcome === "REJECTED" ? "destructive" : "outline"}
-                        >
-                          {clause.outcome}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-gray-700 dark:text-gray-300 mb-3 whitespace-pre-wrap">
-                        {clause.text}
-                      </p>
-                      {clause.comments && (
-                        <div className="bg-gray-50 dark:bg-gray-900 p-2 rounded text-xs text-muted-foreground border">
-                          <span className="font-semibold">Comments: </span>
-                          {clause.comments}
+                  <>
+                    {clauses.map((clause) => {
+                      const currentOutcome = editedClauses[clause.id]?.outcome || clause.outcome;
+                      const currentComments = editedClauses[clause.id]?.comments ?? (clause.comments || "");
+                      
+                      return (
+                        <div key={clause.id} className="p-4 border rounded-md">
+                          <div className="flex items-start justify-between mb-2">
+                            <h4 className="font-semibold text-sm">{clause.identifier}</h4>
+                            <Select
+                              value={currentOutcome}
+                              onValueChange={(val) => handleClauseChange(clause.id, "outcome", val as string)}
+                            >
+                              <SelectTrigger className="w-[120px] h-8 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="PENDING">Pending</SelectItem>
+                                <SelectItem value="ACCEPTED">Accepted</SelectItem>
+                                <SelectItem value="PARTIAL">Partial</SelectItem>
+                                <SelectItem value="HELD">Held</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <p className="text-sm text-gray-700 dark:text-gray-300 mb-4 whitespace-pre-wrap">
+                            {clause.text}
+                          </p>
+                          <textarea
+                            className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                            placeholder="Add comments for this clause..."
+                            value={currentComments}
+                            onChange={(e) => handleClauseChange(clause.id, "comments", e.target.value)}
+                          />
                         </div>
-                      )}
+                      );
+                    })}
+                    <div className="flex justify-end pt-4 border-t mt-4">
+                      <Button 
+                        onClick={handleSaveClauseReview}
+                        disabled={Object.keys(editedClauses).length === 0 || isSavingClauses}
+                      >
+                        {isSavingClauses ? "Saving..." : "Save Clause Review"}
+                      </Button>
                     </div>
-                  ))
+                  </>
                 )}
               </div>
             </CardContent>
