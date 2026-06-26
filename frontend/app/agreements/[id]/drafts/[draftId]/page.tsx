@@ -73,10 +73,10 @@ interface Clause {
 }
 
 interface ComparisonData {
-  previousDraft: Draft | null;
+  baseDraft: Draft | null;
   currentDraft: Draft;
   comparisons: {
-    previousClause: Clause | null;
+    baseClause: Clause | null;
     currentClause: Clause;
   }[];
 }
@@ -208,6 +208,12 @@ export default function DraftWorkspacePage() {
 
   const [comparisonData, setComparisonData] = useState<ComparisonData | null>(null);
   const [loadingComparison, setLoadingComparison] = useState(false);
+  const [selectedBaseDraftId, setSelectedBaseDraftId] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Reset base draft selection when the main draft changes
+    setSelectedBaseDraftId(null);
+  }, [selectedDraftId]);
 
   const fetchComparison = useCallback(async () => {
     if (!token || !selectedDraftId || user?.role !== "LEGAL") {
@@ -216,7 +222,11 @@ export default function DraftWorkspacePage() {
     }
     setLoadingComparison(true);
     try {
-      const res = await fetch(`http://localhost:5000/api/drafts/${selectedDraftId}/compare`, {
+      const url = selectedBaseDraftId 
+        ? `http://localhost:5000/api/drafts/${selectedDraftId}/compare?baseDraftId=${selectedBaseDraftId}`
+        : `http://localhost:5000/api/drafts/${selectedDraftId}/compare`;
+      
+      const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -230,7 +240,7 @@ export default function DraftWorkspacePage() {
     } finally {
       setLoadingComparison(false);
     }
-  }, [token, selectedDraftId, user?.role]);
+  }, [token, selectedDraftId, user?.role, selectedBaseDraftId]);
 
   useEffect(() => {
     fetchComparison();
@@ -575,8 +585,38 @@ export default function DraftWorkspacePage() {
           </Card>
           {user?.role === "LEGAL" ? (
             <Card className="col-span-1 md:col-span-2 lg:col-span-3">
-              <CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-lg">Clause Comparison</CardTitle>
+                {agreement.drafts && agreement.drafts.length > 1 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground whitespace-nowrap">Compare Against:</span>
+                    <Select
+                      value={selectedBaseDraftId || (comparisonData?.baseDraft?.id ?? "")}
+                      onValueChange={(val) => setSelectedBaseDraftId(val)}
+                    >
+                      <SelectTrigger className="w-[140px] h-8 text-xs">
+                        <SelectValue placeholder="Select draft">
+                          {(() => {
+                            const activeId = selectedBaseDraftId || comparisonData?.baseDraft?.id;
+                            if (!activeId) return null;
+                            const activeDraft = agreement.drafts.find(d => d.id === activeId);
+                            return activeDraft ? `Draft ${activeDraft.version}` : null;
+                          })()}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {agreement.drafts
+                          .filter(d => d.id !== selectedDraftId)
+                          .map(d => (
+                            <SelectItem key={d.id} value={d.id}>
+                              Draft {d.version}
+                            </SelectItem>
+                          ))
+                        }
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </CardHeader>
               <CardContent>
                 {loadingComparison ? (
@@ -586,8 +626,8 @@ export default function DraftWorkspacePage() {
                   </div>
                 ) : !comparisonData ? (
                   <p className="text-sm text-muted-foreground">Unable to load comparison data.</p>
-                ) : comparisonData.currentDraft.version === 1 ? (
-                  <p className="text-sm text-muted-foreground">No previous draft available for comparison.</p>
+                ) : !comparisonData.baseDraft ? (
+                  <p className="text-sm text-muted-foreground">No comparison draft available.</p>
                 ) : comparisonData.comparisons.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No clauses are available for this draft.</p>
                 ) : (
@@ -604,14 +644,14 @@ export default function DraftWorkspacePage() {
                           <div className="grid grid-cols-2 divide-x">
                             <div className="p-4">
                               <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase">
-                                Previous Draft (V{comparisonData.previousDraft?.version})
+                                Selected Draft (V{comparisonData.baseDraft?.version})
                               </p>
-                              {comp.previousClause ? (
+                              {comp.baseClause ? (
                                 <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
-                                  {renderLeftDiff(comp.previousClause.text, comp.currentClause.text)}
+                                  {renderLeftDiff(comp.baseClause.text, comp.currentClause.text)}
                                 </p>
                               ) : (
-                                <p className="text-sm text-muted-foreground italic">Clause not present in previous draft.</p>
+                                <p className="text-sm text-muted-foreground italic">Clause not present in selected draft.</p>
                               )}
                             </div>
                             <div className="p-4 flex flex-col h-full">
@@ -635,8 +675,8 @@ export default function DraftWorkspacePage() {
                                 </Select>
                               </div>
                               <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed mb-4 flex-grow">
-                                {comp.previousClause 
-                                  ? renderRightDiff(comp.previousClause.text, comp.currentClause.text)
+                                {comp.baseClause 
+                                  ? renderRightDiff(comp.baseClause.text, comp.currentClause.text)
                                   : comp.currentClause.text}
                               </p>
                               <div className="mt-auto">

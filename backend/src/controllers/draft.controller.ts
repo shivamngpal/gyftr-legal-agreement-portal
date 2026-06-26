@@ -47,7 +47,8 @@ export const updateClauses = async (req: Request, res: Response): Promise<void> 
 export const getComparison = async (req: Request, res: Response): Promise<void> => {
   try {
     const { draftId } = draftIdSchema.parse(req.params);
-    const result = await DraftService.getComparison(draftId);
+    const baseDraftId = req.query.baseDraftId as string | undefined;
+    const result = await DraftService.getComparison(draftId, baseDraftId);
     res.json(result);
   } catch (error: any) {
     if (error instanceof z.ZodError || error?.name === "ZodError") {

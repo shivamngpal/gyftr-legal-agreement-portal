@@ -74,7 +74,7 @@ export class DraftService {
     return { message: "Clauses updated successfully" };
   }
 
-  static async getComparison(draftId: string) {
+  static async getComparison(draftId: string, baseDraftId?: string) {
     // 1. Load the current Draft
     const currentDraft = await prisma.draft.findUnique({
       where: { id: draftId },
@@ -90,51 +90,58 @@ export class DraftService {
       a.identifier.localeCompare(b.identifier, undefined, { numeric: true, sensitivity: 'base' })
     );
 
-    // 2. Determine previous draft
-    if (currentDraft.version === 1) {
-      return {
-        previousDraft: null,
-        currentDraft,
-        comparisons: [],
-      };
+    // 2. Determine base draft
+    let baseDraft = null;
+
+    if (baseDraftId) {
+      baseDraft = await prisma.draft.findUnique({
+        where: { id: baseDraftId },
+        include: { clauses: true },
+      });
+      // Ensure the base draft belongs to the same agreement
+      if (baseDraft && baseDraft.agreementId !== currentDraft.agreementId) {
+        throw new Error("Base draft does not belong to this agreement");
+      }
+    } else {
+      if (currentDraft.version > 1) {
+        baseDraft = await prisma.draft.findFirst({
+          where: {
+            agreementId: currentDraft.agreementId,
+            version: currentDraft.version - 1,
+          },
+          include: { clauses: true },
+        });
+      }
     }
 
-    const previousDraft = await prisma.draft.findFirst({
-      where: {
-        agreementId: currentDraft.agreementId,
-        version: currentDraft.version - 1,
-      },
-      include: { clauses: true },
-    });
-
-    if (!previousDraft) {
+    if (!baseDraft) {
       return {
-        previousDraft: null,
+        baseDraft: null,
         currentDraft,
         comparisons: [],
       };
     }
 
     // 3. Match Clauses
-    const comparisons: { previousClause: any | null, currentClause: any }[] = [];
+    const comparisons: { baseClause: any | null, currentClause: any }[] = [];
 
     // Map for O(1) lookup
-    const previousClausesMap = new Map();
-    for (const pc of previousDraft.clauses) {
+    const baseClausesMap = new Map();
+    for (const bc of baseDraft.clauses) {
       // exact match on identifier
-      previousClausesMap.set(pc.identifier, pc);
+      baseClausesMap.set(bc.identifier, bc);
     }
 
     for (const currentClause of currentDraft.clauses) {
-      const previousClause = previousClausesMap.get(currentClause.identifier) || null;
+      const baseClause = baseClausesMap.get(currentClause.identifier) || null;
       comparisons.push({
-        previousClause,
+        baseClause,
         currentClause,
       });
     }
 
     return {
-      previousDraft,
+      baseDraft,
       currentDraft,
       comparisons,
     };
