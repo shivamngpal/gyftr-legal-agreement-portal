@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { ExportService } from "../services/export.service";
 import { createAgreementSchema, agreementIdSchema, updateAgreementSchema, updateReviewStatusSchema, createRemarkSchema } from "../utils/validation";
 import { AgreementService } from "../services/agreement.service";
+import { DraftService } from "../services/draft.service";
 import { z } from "zod";
 
 export const uploadDraft = async (req: Request, res: Response): Promise<void> => {
@@ -225,6 +226,21 @@ export const getHistory = async (req: Request, res: Response): Promise<void> => 
     res.status(500).json({ error: "Internal server error", message: error?.message });
   }
 };
+export const getClauseMatrix = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = agreementIdSchema.parse(req.params);
+    const matrix = await DraftService.getClauseMatrix(id);
+    res.json(matrix);
+  } catch (error: any) {
+    if (error instanceof z.ZodError || error?.name === "ZodError") {
+      res.status(400).json({ error: "Validation error", details: error.errors });
+      return;
+    }
+    console.error("Get Clause Matrix Error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
 export const exportAgreements = async (req: Request, res: Response): Promise<void> => {
   try {
     const format = req.query.format as string;

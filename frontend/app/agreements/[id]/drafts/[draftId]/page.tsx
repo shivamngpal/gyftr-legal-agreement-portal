@@ -98,6 +98,23 @@ interface ComparisonData {
   }[];
 }
 
+interface MatrixCell {
+  id: string;
+  text: string;
+  outcome: string;
+  comments: string | null;
+}
+
+interface MatrixRow {
+  identifier: string;
+  cells: Record<string, MatrixCell | null>;
+}
+
+interface MatrixData {
+  drafts: { id: string; version: number }[];
+  rows: MatrixRow[];
+}
+
 interface AgreementDetails {
   id: string;
   clientName: string;
@@ -305,6 +322,10 @@ export default function DraftWorkspacePage() {
   const [comparisonData, setComparisonData] = useState<ComparisonData | null>(null);
   const [loadingComparison, setLoadingComparison] = useState(false);
   const [selectedBaseDraftId, setSelectedBaseDraftId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"comparison" | "matrix">("comparison");
+  const [matrixData, setMatrixData] = useState<MatrixData | null>(null);
+  const [loadingMatrix, setLoadingMatrix] = useState(false);
+  const [expandedClause, setExpandedClause] = useState<string | null>(null);
 
   const diffResults = useMemo(() => {
     if (!comparisonData?.comparisons) return [];
@@ -352,6 +373,24 @@ export default function DraftWorkspacePage() {
       setLoadingComparison(false);
     }
   }, [token, selectedDraftId, user?.role]);
+
+  const fetchMatrixData = useCallback(async () => {
+    if (!token || user?.role !== "LEGAL") return;
+    setLoadingMatrix(true);
+    try {
+      const res = await fetch(
+        `http://localhost:5000/api/agreements/${id}/clause-matrix`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (res.ok) {
+        setMatrixData(await res.json());
+      }
+    } catch {
+      // silently fail — matrix is secondary to the main workspace
+    } finally {
+      setLoadingMatrix(false);
+    }
+  }, [id, token, user?.role]);
 
   useEffect(() => {
     fetchComparison();
@@ -478,6 +517,19 @@ export default function DraftWorkspacePage() {
     if (status === "PENDING") badgeVariant = "secondary";
     if (status === "UNDER_REVIEW") badgeVariant = "outline";
     return <Badge variant={badgeVariant}>{status}</Badge>;
+  };
+
+  const getOutcomeBadge = (outcome: string) => {
+    switch (outcome) {
+      case "ACCEPTED":
+        return <Badge variant="outline" className="text-xs border-green-300 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900/30 dark:text-green-300">Accepted</Badge>;
+      case "HELD":
+        return <Badge variant="destructive" className="text-xs">Held</Badge>;
+      case "PARTIAL":
+        return <Badge variant="outline" className="text-xs border-yellow-300 bg-yellow-50 text-yellow-700 dark:border-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300">Partial</Badge>;
+      default:
+        return <Badge variant="secondary" className="text-xs">Pending</Badge>;
+    }
   };
 
   if (loading) {
@@ -718,40 +770,196 @@ export default function DraftWorkspacePage() {
           {user?.role === "LEGAL" ? (
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-lg">Clause Comparison</CardTitle>
-                {agreement.drafts && agreement.drafts.length > 1 && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground whitespace-nowrap">Compare Against:</span>
-                    <Select
-                      value={selectedBaseDraftId || (comparisonData?.baseDraft?.id ?? "")}
-                      onValueChange={(val) => setSelectedBaseDraftId(val)}
+                <CardTitle className="text-lg">Clause Analysis</CardTitle>
+                <div className="flex items-center gap-3">
+                  {/* View mode toggle */}
+                  <div className="flex rounded-md border overflow-hidden">
+                    <Button
+                      size="sm"
+                      variant={viewMode === "comparison" ? "default" : "ghost"}
+                      className="rounded-none h-8 px-3 text-xs"
+                      onClick={() => setViewMode("comparison")}
                     >
-                      <SelectTrigger className="w-[140px] h-8 text-xs">
-                        <SelectValue placeholder="Select draft">
-                          {(() => {
-                            const activeId = selectedBaseDraftId || comparisonData?.baseDraft?.id;
-                            if (!activeId) return null;
-                            const activeDraft = agreement.drafts.find(d => d.id === activeId);
-                            return activeDraft ? `Draft ${activeDraft.version}` : null;
-                          })()}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {agreement.drafts
-                          .filter(d => d.id !== selectedDraftId)
-                          .map(d => (
-                            <SelectItem key={d.id} value={d.id}>
-                              Draft {d.version}
-                            </SelectItem>
-                          ))
-                        }
-                      </SelectContent>
-                    </Select>
+                      Side-by-Side
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={viewMode === "matrix" ? "default" : "ghost"}
+                      className="rounded-none h-8 px-3 text-xs border-l"
+                      onClick={() => {
+                        setViewMode("matrix");
+                        if (!matrixData) fetchMatrixData();
+                      }}
+                    >
+                      Matrix
+                    </Button>
                   </div>
-                )}
+                  {/* Compare Against selector — only in side-by-side mode */}
+                  {viewMode === "comparison" && agreement.drafts && agreement.drafts.length > 1 && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground whitespace-nowrap">Compare Against:</span>
+                      <Select
+                        value={selectedBaseDraftId || (comparisonData?.baseDraft?.id ?? "")}
+                        onValueChange={(val) => setSelectedBaseDraftId(val)}
+                      >
+                        <SelectTrigger className="w-[140px] h-8 text-xs">
+                          <SelectValue placeholder="Select draft">
+                            {(() => {
+                              const activeId = selectedBaseDraftId || comparisonData?.baseDraft?.id;
+                              if (!activeId) return null;
+                              const activeDraft = agreement.drafts.find(d => d.id === activeId);
+                              return activeDraft ? `Draft ${activeDraft.version}` : null;
+                            })()}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {agreement.drafts
+                            .filter(d => d.id !== selectedDraftId)
+                            .map(d => (
+                              <SelectItem key={d.id} value={d.id}>
+                                Draft {d.version}
+                              </SelectItem>
+                            ))
+                          }
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
-                {loadingComparison ? (
+                {viewMode === "matrix" ? (
+                  /* ── Matrix View ── */
+                  loadingMatrix ? (
+                    <div className="space-y-2">
+                      {[...Array(5)].map((_, i) => (
+                        <Skeleton key={i} className="h-9 w-full" />
+                      ))}
+                    </div>
+                  ) : !matrixData || matrixData.rows.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No clause data available. Upload drafts with extracted clauses first.
+                    </p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm border-collapse">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-left px-3 py-2 font-semibold min-w-[200px] bg-white dark:bg-gray-950 sticky left-0 z-10 border-r">
+                              Clause
+                            </th>
+                            {matrixData.drafts.map((d) => (
+                              <th key={d.id} className="text-center px-3 py-2 font-semibold min-w-[120px]">
+                                <Badge
+                                  variant={d.id === selectedDraftId ? "default" : "outline"}
+                                  className="text-xs"
+                                >
+                                  V{d.version}{d.id === selectedDraftId ? " ★" : ""}
+                                </Badge>
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {matrixData.rows.map((row) => (
+                            <React.Fragment key={row.identifier}>
+                              <tr
+                                className="border-b cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900/50"
+                                onClick={() =>
+                                  setExpandedClause((prev) =>
+                                    prev === row.identifier ? null : row.identifier
+                                  )
+                                }
+                              >
+                                <td className="px-3 py-2 font-medium bg-white dark:bg-gray-950 sticky left-0 border-r">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-muted-foreground text-xs select-none w-3">
+                                      {expandedClause === row.identifier ? "▾" : "▸"}
+                                    </span>
+                                    {row.identifier}
+                                  </div>
+                                </td>
+                                {matrixData.drafts.map((draft) => {
+                                  const cell = row.cells[draft.id];
+                                  return (
+                                    <td key={draft.id} className="px-3 py-2 text-center">
+                                      {cell
+                                        ? getOutcomeBadge(cell.outcome)
+                                        : <span className="text-muted-foreground text-xs">—</span>}
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                              {expandedClause === row.identifier && (
+                                <tr>
+                                  <td
+                                    colSpan={matrixData.drafts.length + 1}
+                                    className="p-0 border-b bg-slate-50 dark:bg-slate-900/40"
+                                  >
+                                    <div
+                                      className="grid divide-x"
+                                      style={{
+                                        gridTemplateColumns: `repeat(${matrixData.drafts.length}, minmax(220px, 1fr))`,
+                                      }}
+                                    >
+                                      {matrixData.drafts.map((draft, idx) => {
+                                        const cell = row.cells[draft.id];
+                                        const prevCell =
+                                          idx > 0
+                                            ? row.cells[matrixData.drafts[idx - 1].id]
+                                            : null;
+                                        const isCurrent = draft.id === selectedDraftId;
+                                        return (
+                                          <div
+                                            key={draft.id}
+                                            className={`p-4 space-y-2 ${isCurrent ? "bg-blue-50/60 dark:bg-blue-900/10" : ""}`}
+                                          >
+                                            <div className="flex items-center gap-1.5 mb-1">
+                                              <p className="text-xs font-semibold text-muted-foreground">
+                                                V{draft.version}
+                                              </p>
+                                              {isCurrent && (
+                                                <Badge variant="outline" className="text-[10px] h-4 px-1">
+                                                  current
+                                                </Badge>
+                                              )}
+                                              {cell && (
+                                                <span className="ml-auto">
+                                                  {getOutcomeBadge(cell.outcome)}
+                                                </span>
+                                              )}
+                                            </div>
+                                            {cell ? (
+                                              <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
+                                                {prevCell
+                                                  ? renderRightDiff(prevCell.text, cell.text)
+                                                  : cell.text}
+                                              </p>
+                                            ) : (
+                                              <p className="text-sm italic text-muted-foreground">
+                                                Not present in this version
+                                              </p>
+                                            )}
+                                            {cell?.comments && (
+                                              <div className="text-xs text-muted-foreground bg-white dark:bg-gray-900 border rounded p-2 mt-2">
+                                                <span className="font-semibold">Note: </span>
+                                                {cell.comments}
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )
+                ) : loadingComparison ? (
                   <div className="space-y-4">
                     <Skeleton className="h-10 w-full" />
                     <Skeleton className="h-24 w-full" />

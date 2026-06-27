@@ -75,6 +75,53 @@ export class DraftService {
     return { message: "Clauses updated successfully" };
   }
 
+  static async getClauseMatrix(agreementId: string) {
+    const drafts = await prisma.draft.findMany({
+      where: { agreementId },
+      orderBy: { version: "asc" },
+      select: {
+        id: true,
+        version: true,
+        clauses: {
+          select: {
+            id: true,
+            identifier: true,
+            text: true,
+            outcome: true,
+            comments: true,
+          },
+        },
+      },
+    });
+
+    // Union of all clause identifiers across all drafts, sorted naturally
+    const identifierSet = new Set<string>();
+    for (const draft of drafts) {
+      for (const clause of draft.clauses) {
+        identifierSet.add(clause.identifier);
+      }
+    }
+    const identifiers = Array.from(identifierSet).sort((a, b) =>
+      a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" })
+    );
+
+    const rows = identifiers.map((identifier) => {
+      const cells: Record<string, { id: string; text: string; outcome: string; comments: string | null } | null> = {};
+      for (const draft of drafts) {
+        const clause = draft.clauses.find((c) => c.identifier === identifier);
+        cells[draft.id] = clause
+          ? { id: clause.id, text: clause.text, outcome: clause.outcome as string, comments: clause.comments }
+          : null;
+      }
+      return { identifier, cells };
+    });
+
+    return {
+      drafts: drafts.map((d) => ({ id: d.id, version: d.version })),
+      rows,
+    };
+  }
+
   static async getComparison(draftId: string, baseDraftId?: string) {
     let currentDraft;
     let baseDraft = null;

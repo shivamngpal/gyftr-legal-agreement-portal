@@ -1,17 +1,18 @@
 import { Router } from "express";
 import multer from "multer";
-import { 
-  createAgreement, 
-  getAllAgreements, 
-  getAgreementById, 
-  updateAgreement, 
-  deleteAgreement, 
+import {
+  createAgreement,
+  getAllAgreements,
+  getAgreementById,
+  updateAgreement,
+  deleteAgreement,
   updateReviewStatus,
   uploadDraft,
   getRemarks,
   createRemark,
   getHistory,
-  exportAgreements
+  exportAgreements,
+  getClauseMatrix
 } from "../controllers/agreement.controller";
 import { createSignOff, getSignOffs } from "../controllers/signoff.controller";
 import { authenticate } from "../middleware/auth.middleware";
@@ -47,6 +48,9 @@ router.post("/:id/remarks", createRemark);
 
 // History -> Any authenticated user
 router.get("/:id/history", getHistory);
+
+// Clause Matrix -> LEGAL only
+router.get("/:id/clause-matrix", authorizeRoles("LEGAL"), getClauseMatrix);
 
 // SignOff -> POST requires LEGAL/BUSINESS, GET is Any authenticated user
 router.post("/:id/signoff", createSignOff);
