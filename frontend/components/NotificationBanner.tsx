@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
+import { API_URL } from "@/lib/utils";
 
 interface Reminder {
   id: string;
@@ -27,7 +28,7 @@ export function NotificationBanner() {
 
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:5000/api/reminders/my", {
+      const res = await fetch(`${API_URL}/api/reminders/my`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -68,7 +69,7 @@ export function NotificationBanner() {
     try {
       await Promise.all(
         previousReminders.map((reminder) =>
-          fetch(`http://localhost:5000/api/reminders/${reminder.id}/read`, {
+          fetch(`${API_URL}/api/reminders/${reminder.id}/read`, {
             method: "PATCH",
             headers: { Authorization: `Bearer ${token}` },
           })

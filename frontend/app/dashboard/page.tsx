@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { API_URL } from "@/lib/utils";
 import {
   Select,
   SelectContent,
@@ -113,7 +114,7 @@ const RemindModal = React.memo(
       setIsReminding(true);
 
       try {
-        const res = await fetch("http://localhost:5000/api/reminders", {
+        const res = await fetch(`${API_URL}/api/reminders`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -232,7 +233,7 @@ export default function DashboardPage() {
   const fetchUsers = useCallback(async () => {
     if (!token) return;
     try {
-      const res = await fetch("http://localhost:5000/api/users", {
+      const res = await fetch(`${API_URL}/api/users`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -255,7 +256,7 @@ export default function DashboardPage() {
       if (myStatusFilter) params.append("myStatus", myStatusFilter);
 
       const agreementsRes = await fetch(
-        `http://localhost:5000/api/agreements?${params.toString()}`,
+        `${API_URL}/api/agreements?${params.toString()}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -273,7 +274,7 @@ export default function DashboardPage() {
     if (!token || user?.role !== "LEGAL") return;
     setStatsLoading(true);
     try {
-      const res = await fetch("http://localhost:5000/api/dashboard/stats", {
+      const res = await fetch(`${API_URL}/api/dashboard/stats`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -305,7 +306,7 @@ export default function DashboardPage() {
       setIsSubmitting(true);
 
       try {
-        const res = await fetch("http://localhost:5000/api/agreements", {
+        const res = await fetch(`${API_URL}/api/agreements`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -349,26 +350,37 @@ export default function DashboardPage() {
   );
 
   const getTeamStatus = (statuses: ReviewStatus[], team: string) => {
-    const status = statuses.find((s) => s.team === team)?.status || "N/A";
-    let badgeVariant: "default" | "secondary" | "destructive" | "outline" =
-      "outline";
-    if (status === "APPROVED") badgeVariant = "default";
-    if (status === "REJECTED") badgeVariant = "destructive";
-    if (status === "PENDING") badgeVariant = "secondary";
-    if (status === "UNDER_REVIEW") badgeVariant = "outline";
-    return <Badge variant={badgeVariant}>{status}</Badge>;
+    const status = statuses.find((s) => s.team === team)?.status;
+    if (!status) return <span className="text-xs text-muted-foreground">—</span>;
+    const labels: Record<string, string> = {
+      PENDING: "Pending",
+      UNDER_REVIEW: "Under Review",
+      APPROVED: "Approved",
+      REJECTED: "Rejected",
+    };
+    const label = labels[status] || status;
+    switch (status) {
+      case "APPROVED":
+        return <Badge variant="outline" className="rounded-full text-xs border-green-300 bg-green-50 text-green-700">{label}</Badge>;
+      case "REJECTED":
+        return <Badge variant="destructive" className="rounded-full text-xs">{label}</Badge>;
+      case "UNDER_REVIEW":
+        return <Badge variant="outline" className="rounded-full text-xs border-blue-200 bg-blue-50 text-blue-700">{label}</Badge>;
+      default:
+        return <Badge variant="secondary" className="rounded-full text-xs">{label}</Badge>;
+    }
   };
 
   const getAgreementStatusBadge = (status: string) => {
     const label = agreementStatusLabels[status] || status;
     switch (status) {
       case "DRAFT":
-        return <Badge variant="secondary">{label}</Badge>;
+        return <Badge variant="secondary" className="rounded-full">{label}</Badge>;
       case "IN_REVIEW":
         return (
           <Badge
             variant="outline"
-            className="border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+            className="rounded-full border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
           >
             {label}
           </Badge>
@@ -377,7 +389,7 @@ export default function DashboardPage() {
         return (
           <Badge
             variant="outline"
-            className="border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-900/30 dark:text-orange-300"
+            className="rounded-full border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-900/30 dark:text-orange-300"
           >
             {label}
           </Badge>
@@ -386,7 +398,7 @@ export default function DashboardPage() {
         return (
           <Badge
             variant="outline"
-            className="border-yellow-300 bg-yellow-100 text-yellow-800 dark:border-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300"
+            className="rounded-full border-yellow-300 bg-yellow-100 text-yellow-800 dark:border-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300"
           >
             {label}
           </Badge>
@@ -395,15 +407,15 @@ export default function DashboardPage() {
         return (
           <Badge
             variant="outline"
-            className="border-green-300 bg-green-100 text-green-800 dark:border-green-800 dark:bg-green-900/30 dark:text-green-300"
+            className="rounded-full border-green-300 bg-green-100 text-green-800 dark:border-green-800 dark:bg-green-900/30 dark:text-green-300"
           >
             {label}
           </Badge>
         );
       case "CANCELLED":
-        return <Badge variant="destructive">{label}</Badge>;
+        return <Badge variant="destructive" className="rounded-full">{label}</Badge>;
       default:
-        return <Badge variant="outline">{label}</Badge>;
+        return <Badge variant="outline" className="rounded-full">{label}</Badge>;
     }
   };
 
@@ -439,7 +451,7 @@ export default function DashboardPage() {
       params.append("format", format);
 
       const res = await fetch(
-        `http://localhost:5000/api/agreements/export?${params.toString()}`,
+        `${API_URL}/api/agreements/export?${params.toString()}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -535,16 +547,13 @@ export default function DashboardPage() {
                     <div className="space-y-2">
                       <Label>Legal SPOC</Label>
                       <Select
-                        value={formData.legalSpocId}
+                        value={formData.legalSpocId || undefined}
                         onValueChange={(val) =>
                           setFormData({ ...formData, legalSpocId: val || "" })
                         }
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder="Select SPOC">
-                            {users.find((u) => u.id === formData.legalSpocId)
-                              ?.name || ""}
-                          </SelectValue>
+                          <SelectValue placeholder="Select SPOC" />
                         </SelectTrigger>
                         <SelectContent>
                           {users
@@ -560,16 +569,13 @@ export default function DashboardPage() {
                     <div className="space-y-2">
                       <Label>Finance SPOC</Label>
                       <Select
-                        value={formData.financeSpocId}
+                        value={formData.financeSpocId || undefined}
                         onValueChange={(val) =>
                           setFormData({ ...formData, financeSpocId: val || "" })
                         }
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder="Select SPOC">
-                            {users.find((u) => u.id === formData.financeSpocId)
-                              ?.name || ""}
-                          </SelectValue>
+                          <SelectValue placeholder="Select SPOC" />
                         </SelectTrigger>
                         <SelectContent>
                           {users
@@ -585,20 +591,13 @@ export default function DashboardPage() {
                     <div className="space-y-2">
                       <Label>Business SPOC</Label>
                       <Select
-                        value={formData.businessSpocId}
+                        value={formData.businessSpocId || undefined}
                         onValueChange={(val) =>
-                          setFormData({
-                            ...formData,
-                            businessSpocId: val || "",
-                          })
+                          setFormData({ ...formData, businessSpocId: val || "" })
                         }
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder="Select SPOC">
-                            {users.find(
-                              (u) => u.id === formData.businessSpocId
-                            )?.name || ""}
-                          </SelectValue>
+                          <SelectValue placeholder="Select SPOC" />
                         </SelectTrigger>
                         <SelectContent>
                           {users
@@ -614,20 +613,13 @@ export default function DashboardPage() {
                     <div className="space-y-2">
                       <Label>Compliance SPOC</Label>
                       <Select
-                        value={formData.complianceSpocId}
+                        value={formData.complianceSpocId || undefined}
                         onValueChange={(val) =>
-                          setFormData({
-                            ...formData,
-                            complianceSpocId: val || "",
-                          })
+                          setFormData({ ...formData, complianceSpocId: val || "" })
                         }
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder="Select SPOC">
-                            {users.find(
-                              (u) => u.id === formData.complianceSpocId
-                            )?.name || ""}
-                          </SelectValue>
+                          <SelectValue placeholder="Select SPOC" />
                         </SelectTrigger>
                         <SelectContent>
                           {users

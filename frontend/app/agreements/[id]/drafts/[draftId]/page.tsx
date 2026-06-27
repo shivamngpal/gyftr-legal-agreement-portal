@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dialog";
 import * as diff from "diff";
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from "react-resizable-panels";
+import { API_URL } from "@/lib/utils";
 
 interface Spoc {
   id: string;
@@ -204,7 +205,7 @@ const WorkspacePdfLayout = React.memo(({ fileUrl, headerContent, children, claus
 
   return (
     <div className="flex flex-col">
-      <div className="flex items-start justify-between mb-8 border-b pb-6">
+      <div className="flex items-center justify-between mb-5 border-b pb-4">
         <div className="flex-1">
           {headerContent}
         </div>
@@ -321,30 +322,30 @@ export default function DraftWorkspacePage() {
   const selectedDraftId = draftId;
 
   const fetchAgreementData = useCallback(async () => {
-    const res = await fetch(`http://localhost:5000/api/agreements/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(`${API_URL}/api/agreements/${id}`, { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) throw new Error("Failed to load agreement");
     setAgreement(await res.json());
   }, [id, token]);
 
   const fetchRemarks = useCallback(async () => {
-    const res = await fetch(`http://localhost:5000/api/agreements/${id}/remarks?draftId=${draftId}`, { headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(`${API_URL}/api/agreements/${id}/remarks?draftId=${draftId}`, { headers: { Authorization: `Bearer ${token}` } });
     if (res.ok) setRemarks(await res.json());
   }, [id, draftId, token]);
 
   const fetchHistory = useCallback(async () => {
-    const res = await fetch(`http://localhost:5000/api/agreements/${id}/history?draftId=${draftId}`, { headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(`${API_URL}/api/agreements/${id}/history?draftId=${draftId}`, { headers: { Authorization: `Bearer ${token}` } });
     if (res.ok) setHistory(await res.json());
   }, [id, draftId, token]);
 
   const fetchSignOffs = useCallback(async () => {
-    const res = await fetch(`http://localhost:5000/api/agreements/${id}/signoff`, { headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(`${API_URL}/api/agreements/${id}/signoff`, { headers: { Authorization: `Bearer ${token}` } });
     if (res.ok) setSignOffs(await res.json());
   }, [id, token]);
 
   const fetchClauses = useCallback(async () => {
     if (!selectedDraftId) return;
     try {
-      const res = await fetch(`http://localhost:5000/api/drafts/${selectedDraftId}/clauses`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`${API_URL}/api/drafts/${selectedDraftId}/clauses`, { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) setClauses(await res.json());
     } catch {
       setClauses([]);
@@ -378,7 +379,7 @@ export default function DraftWorkspacePage() {
     if (!token) return;
     setIsSubmittingSignOff(true);
     try {
-      const res = await fetch(`http://localhost:5000/api/agreements/${id}/signoff`, {
+      const res = await fetch(`${API_URL}/api/agreements/${id}/signoff`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -445,8 +446,8 @@ export default function DraftWorkspacePage() {
     setLoadingComparison(true);
     try {
       const url = baseDraftIdToFetch 
-        ? `http://localhost:5000/api/drafts/${selectedDraftId}/compare?baseDraftId=${baseDraftIdToFetch}`
-        : `http://localhost:5000/api/drafts/${selectedDraftId}/compare`;
+        ? `${API_URL}/api/drafts/${selectedDraftId}/compare?baseDraftId=${baseDraftIdToFetch}`
+        : `${API_URL}/api/drafts/${selectedDraftId}/compare`;
       
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
@@ -469,7 +470,7 @@ export default function DraftWorkspacePage() {
     setLoadingMatrix(true);
     try {
       const res = await fetch(
-        `http://localhost:5000/api/agreements/${id}/clause-matrix`,
+        `${API_URL}/api/agreements/${id}/clause-matrix`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       if (res.ok) {
@@ -496,7 +497,7 @@ export default function DraftWorkspacePage() {
     if (!token) return;
     setIsUpdating(team);
     try {
-      const res = await fetch(`http://localhost:5000/api/agreements/${id}/review`, {
+      const res = await fetch(`${API_URL}/api/agreements/${id}/review`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -524,7 +525,7 @@ export default function DraftWorkspacePage() {
     if (!newRemark.trim() || !token) return;
     setIsSubmittingRemark(true);
     try {
-      const res = await fetch(`http://localhost:5000/api/agreements/${id}/remarks`, {
+      const res = await fetch(`${API_URL}/api/agreements/${id}/remarks`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -575,7 +576,7 @@ export default function DraftWorkspacePage() {
     }));
 
     try {
-      const res = await fetch(`http://localhost:5000/api/drafts/${draftId}/clauses`, {
+      const res = await fetch(`${API_URL}/api/drafts/${draftId}/clauses`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -600,13 +601,25 @@ export default function DraftWorkspacePage() {
   }, [draftId, token, editedClauses, fetchClauses]);
 
   const getTeamStatusBadge = (statuses: ReviewStatus[], team: string) => {
-    const status = statuses.find((s) => s.team === team)?.status || "N/A";
-    let badgeVariant: "default" | "secondary" | "destructive" | "outline" = "outline";
-    if (status === "APPROVED") badgeVariant = "default";
-    if (status === "REJECTED") badgeVariant = "destructive";
-    if (status === "PENDING") badgeVariant = "secondary";
-    if (status === "UNDER_REVIEW") badgeVariant = "outline";
-    return <Badge variant={badgeVariant}>{status}</Badge>;
+    const status = statuses.find((s) => s.team === team)?.status;
+    if (!status) return <span className="text-xs text-muted-foreground">—</span>;
+    const labels: Record<string, string> = {
+      PENDING: "Pending",
+      UNDER_REVIEW: "Under Review",
+      APPROVED: "Approved",
+      REJECTED: "Rejected",
+    };
+    const label = labels[status] || status;
+    switch (status) {
+      case "APPROVED":
+        return <Badge variant="outline" className="rounded-full text-xs border-green-300 bg-green-50 text-green-700">{label}</Badge>;
+      case "REJECTED":
+        return <Badge variant="destructive" className="rounded-full text-xs">{label}</Badge>;
+      case "UNDER_REVIEW":
+        return <Badge variant="outline" className="rounded-full text-xs border-blue-200 bg-blue-50 text-blue-700">{label}</Badge>;
+      default:
+        return <Badge variant="secondary" className="rounded-full text-xs">{label}</Badge>;
+    }
   };
 
   if (loading) {
@@ -651,49 +664,52 @@ export default function DraftWorkspacePage() {
     const label = agreementStatusLabels[status] || status;
     switch (status) {
       case "DRAFT":
-        return <Badge variant="secondary">{label}</Badge>;
+        return <Badge variant="secondary" className="rounded-full">{label}</Badge>;
       case "IN_REVIEW":
-        return <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300">{label}</Badge>;
+        return <Badge variant="outline" className="rounded-full border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300">{label}</Badge>;
       case "PENDING_SIGNATURE":
-        return <Badge variant="outline" className="border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-900/30 dark:text-orange-300">{label}</Badge>;
+        return <Badge variant="outline" className="rounded-full border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-900/30 dark:text-orange-300">{label}</Badge>;
       case "PARTIALLY_SIGNED":
-        return <Badge variant="outline" className="border-yellow-300 bg-yellow-100 text-yellow-800 dark:border-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300">{label}</Badge>;
+        return <Badge variant="outline" className="rounded-full border-yellow-300 bg-yellow-100 text-yellow-800 dark:border-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300">{label}</Badge>;
       case "EXECUTED":
-        return <Badge variant="outline" className="border-green-300 bg-green-100 text-green-800 dark:border-green-800 dark:bg-green-900/30 dark:text-green-300">{label}</Badge>;
+        return <Badge variant="outline" className="rounded-full border-green-300 bg-green-100 text-green-800 dark:border-green-800 dark:bg-green-900/30 dark:text-green-300">{label}</Badge>;
       case "CANCELLED":
-        return <Badge variant="destructive">{label}</Badge>;
+        return <Badge variant="destructive" className="rounded-full">{label}</Badge>;
       default:
-        return <Badge variant="outline">{label}</Badge>;
+        return <Badge variant="outline" className="rounded-full">{label}</Badge>;
     }
   };
 
   return (
-    <div className="space-y-8 pb-10">
-      
+    <div className="max-w-6xl mx-auto space-y-6 pb-10">
+
       <WorkspacePdfLayout
         fileUrl={currentDraft?.fileUrl}
         clauses={clauses}
         headerContent={
-          <div className="flex flex-col sm:flex-row sm:items-center space-y-4 sm:space-y-0">
-            <div className="flex items-center space-x-4">
-              <Link href={`/agreements/${id}`}>
-                <Button variant="outline" size="icon">
-                  <ArrowLeftIcon className="h-4 w-4" />
-                </Button>
-              </Link>
-              <div>
-                <h2 className="text-2xl font-bold tracking-tight">
-                  {agreement.clientName} - Draft Version {currentDraft?.version || "Unknown"}
+          <div className="flex items-center gap-3">
+            <Link href={`/agreements/${id}`}>
+              <Button variant="outline" size="icon" className="shrink-0">
+                <ArrowLeftIcon className="h-4 w-4" />
+              </Button>
+            </Link>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-lg font-bold tracking-tight truncate">
+                  {agreement.clientName}
                 </h2>
-                <div className="flex items-center space-x-2 mt-1">
-                  <Badge variant="outline">{agreement?.type ? agreementTypeLabels[agreement.type] || agreement.type : agreement.type}</Badge>
-                  <span className="text-gray-400">•</span>
-                  {getAgreementStatusBadge(agreement.status)}
-                  <span className="text-gray-400">•</span>
-                  <span className="text-sm text-muted-foreground">
-                    Uploaded on {currentDraft ? new Date(currentDraft.createdAt).toLocaleString() : "Unknown"}
-                  </span>
-                </div>
+                <Badge variant="secondary" className="text-xs shrink-0">
+                  Draft V{currentDraft?.version ?? "?"}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                <Badge variant="outline" className="text-xs">{agreementTypeLabels[agreement.type] || agreement.type}</Badge>
+                <span className="text-gray-300 text-xs">•</span>
+                {getAgreementStatusBadge(agreement.status)}
+                <span className="text-gray-300 text-xs">•</span>
+                <span className="text-xs text-muted-foreground">
+                  {currentDraft ? new Date(currentDraft.createdAt).toLocaleDateString() : ""}
+                </span>
               </div>
             </div>
           </div>
@@ -1296,7 +1312,7 @@ export default function DraftWorkspacePage() {
                             One party has signed. Awaiting the remaining signature.
                           </div>
                         )}
-                        <Button className="w-full" onClick={() => setIsSignOffModalOpen(true)}>
+                        <Button onClick={() => setIsSignOffModalOpen(true)}>
                           Record Sign-Off
                         </Button>
                       </div>

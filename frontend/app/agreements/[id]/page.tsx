@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeftIcon } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { API_URL } from "@/lib/utils";
 
 interface Spoc {
   id: string;
@@ -115,7 +116,7 @@ const RemarksSection = React.memo(({ remarks, onAddRemark }: RemarksSectionProps
   };
 
   return (
-    <Card className="col-span-1 md:col-span-2 lg:col-span-3 mt-6">
+    <Card className="col-span-1 md:col-span-2 mt-4">
       <CardHeader>
         <CardTitle className="text-lg">Remarks & Discussion</CardTitle>
       </CardHeader>
@@ -176,7 +177,7 @@ interface HistorySectionProps {
 
 const HistorySection = React.memo(({ history }: HistorySectionProps) => {
   return (
-    <Card className="col-span-1 md:col-span-2 lg:col-span-3 mt-6">
+    <Card className="col-span-1 md:col-span-2 mt-4">
       <CardHeader>
         <CardTitle className="text-lg">History Timeline</CardTitle>
       </CardHeader>
@@ -228,7 +229,7 @@ export default function AgreementDetailsPage() {
 
   const fetchAgreementData = useCallback(async () => {
     if (!token) return;
-    const res = await fetch(`http://localhost:5000/api/agreements/${id}`, {
+    const res = await fetch(`${API_URL}/api/agreements/${id}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (res.status === 404) throw new Error("NOT_FOUND");
@@ -241,7 +242,7 @@ export default function AgreementDetailsPage() {
 
   const fetchRemarks = useCallback(async () => {
     if (!token) return;
-    const res = await fetch(`http://localhost:5000/api/agreements/${id}/remarks`, {
+    const res = await fetch(`${API_URL}/api/agreements/${id}/remarks`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (res.ok) {
@@ -251,7 +252,7 @@ export default function AgreementDetailsPage() {
 
   const fetchHistory = useCallback(async () => {
     if (!token) return;
-    const res = await fetch(`http://localhost:5000/api/agreements/${id}/history`, {
+    const res = await fetch(`${API_URL}/api/agreements/${id}/history`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (res.ok) {
@@ -283,7 +284,7 @@ export default function AgreementDetailsPage() {
 
   const handleAddRemark = useCallback(async (message: string) => {
     if (!token) return;
-    const res = await fetch(`http://localhost:5000/api/agreements/${id}/remarks`, {
+    const res = await fetch(`${API_URL}/api/agreements/${id}/remarks`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -316,7 +317,7 @@ export default function AgreementDetailsPage() {
     formData.append("file", file);
 
     try {
-      const res = await fetch(`http://localhost:5000/api/agreements/${id}/drafts`, {
+      const res = await fetch(`${API_URL}/api/agreements/${id}/drafts`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -389,44 +390,42 @@ export default function AgreementDetailsPage() {
     const label = agreementStatusLabels[status] || status;
     switch (status) {
       case "DRAFT":
-        return <Badge variant="secondary">{label}</Badge>;
+        return <Badge variant="secondary" className="rounded-full">{label}</Badge>;
       case "IN_REVIEW":
-        return <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300">{label}</Badge>;
+        return <Badge variant="outline" className="rounded-full border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300">{label}</Badge>;
       case "PENDING_SIGNATURE":
-        return <Badge variant="outline" className="border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-900/30 dark:text-orange-300">{label}</Badge>;
+        return <Badge variant="outline" className="rounded-full border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-900/30 dark:text-orange-300">{label}</Badge>;
       case "PARTIALLY_SIGNED":
-        return <Badge variant="outline" className="border-yellow-300 bg-yellow-100 text-yellow-800 dark:border-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300">{label}</Badge>;
+        return <Badge variant="outline" className="rounded-full border-yellow-300 bg-yellow-100 text-yellow-800 dark:border-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300">{label}</Badge>;
       case "EXECUTED":
-        return <Badge variant="outline" className="border-green-300 bg-green-100 text-green-800 dark:border-green-800 dark:bg-green-900/30 dark:text-green-300">{label}</Badge>;
+        return <Badge variant="outline" className="rounded-full border-green-300 bg-green-100 text-green-800 dark:border-green-800 dark:bg-green-900/30 dark:text-green-300">{label}</Badge>;
       case "CANCELLED":
-        return <Badge variant="destructive">{label}</Badge>;
+        return <Badge variant="destructive" className="rounded-full">{label}</Badge>;
       default:
-        return <Badge variant="outline">{label}</Badge>;
+        return <Badge variant="outline" className="rounded-full">{label}</Badge>;
     }
   };
 
   return (
-    <div className="space-y-8 pb-10">
+    <div className="max-w-5xl mx-auto space-y-6 pb-10">
       {/* Header Area */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
-        <div className="flex items-center space-x-4">
-          <Link href="/dashboard">
-            <Button variant="outline" size="icon">
-              <ArrowLeftIcon className="h-4 w-4" />
-            </Button>
-          </Link>
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight">{agreement.clientName}</h2>
-            <div className="flex items-center space-x-2 mt-1">
-              <Badge variant="outline">{agreementTypeLabels[agreement.type] || agreement.type}</Badge>
-              <span className="text-gray-400">•</span>
-              {getAgreementStatusBadge(agreement.status)}
-            </div>
+      <div className="flex items-center gap-4">
+        <Link href="/dashboard">
+          <Button variant="outline" size="icon" className="shrink-0">
+            <ArrowLeftIcon className="h-4 w-4" />
+          </Button>
+        </Link>
+        <div>
+          <h2 className="text-xl font-bold tracking-tight">{agreement.clientName}</h2>
+          <div className="flex items-center gap-2 mt-1">
+            <Badge variant="outline" className="text-xs">{agreementTypeLabels[agreement.type] || agreement.type}</Badge>
+            <span className="text-gray-300">•</span>
+            {getAgreementStatusBadge(agreement.status)}
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {/* Core Info */}
         <Card>
           <CardHeader>
@@ -482,7 +481,7 @@ export default function AgreementDetailsPage() {
         </Card>
 
         {/* Drafts Section */}
-        <Card className="col-span-1 md:col-span-2 lg:col-span-3">
+        <Card className="col-span-1 md:col-span-2">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-lg">Drafts</CardTitle>
             {user?.role === "LEGAL" && (
