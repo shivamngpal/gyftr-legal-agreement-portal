@@ -80,7 +80,48 @@ export class SignOffService {
         },
       });
 
-      // 4. Recompute overall status
+      // 4. Determine overall execution status based on all sign-offs
+      const allSignOffs = await tx.signOff.findMany({
+        where: { agreementId },
+        include: { signatory: true },
+      });
+
+      const legalSigned = allSignOffs.some((s: any) => s.signatory.role === "LEGAL");
+      const businessSigned = allSignOffs.some((s: any) => s.signatory.role === "BUSINESS");
+
+      if (legalSigned && businessSigned) {
+        // Both signed -> EXECUTED
+        await tx.agreement.update({
+          where: { id: agreementId },
+          data: { status: "EXECUTED" },
+        });
+        await tx.historyLog.create({
+          data: {
+            agreementId,
+            actorId: signatoryId,
+            action: "AGREEMENT_EXECUTED",
+            details: "Agreement fully executed after both Legal and Business recorded sign-offs",
+            draftId: null, // intentionally null as it's an agreement-level action
+          },
+        });
+      } else if (legalSigned || businessSigned) {
+        // One signed -> PARTIALLY_SIGNED
+        await tx.agreement.update({
+          where: { id: agreementId },
+          data: { status: "PARTIALLY_SIGNED" },
+        });
+        await tx.historyLog.create({
+          data: {
+            agreementId,
+            actorId: signatoryId,
+            action: "AGREEMENT_PARTIALLY_SIGNED",
+            details: `Agreement partially signed. Awaiting the remaining party's sign-off.`,
+            draftId: null,
+          },
+        });
+      }
+
+      // 5. Recompute other dynamic status logic (does not override EXECUTED or PARTIALLY_SIGNED)
       await AgreementService.recomputeAgreementStatus(tx, agreementId, signatoryId, latestDraft.id);
 
       return signOff;

@@ -834,7 +834,14 @@ export default function DraftWorkspacePage() {
                 )}
                 {user && (user.role === "LEGAL" || user.role === "BUSINESS") && (
                   <div className="pt-4 border-t mt-4">
-                    {signOffs.some(s => s.signatory.name === user.name && s.signatory.role === user.role) ? (
+                    {agreement?.status === "EXECUTED" ? (
+                      <p className="text-sm font-medium text-green-600 flex items-center justify-center space-x-2 py-2">
+                        <span>Agreement fully executed</span>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </p>
+                    ) : signOffs.some(s => s.signatory.name === user.name && s.signatory.role === user.role) ? (
                       <p className="text-sm font-medium text-green-600 flex items-center justify-center space-x-2 py-2">
                         <span>You have signed this agreement</span>
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -842,9 +849,16 @@ export default function DraftWorkspacePage() {
                         </svg>
                       </p>
                     ) : (
-                      <Button className="w-full" onClick={() => setIsSignOffModalOpen(true)}>
-                        Record Sign-Off
-                      </Button>
+                      <div className="space-y-3">
+                        {agreement?.status === "PARTIALLY_SIGNED" && (
+                          <div className="text-sm text-yellow-700 bg-yellow-50 p-2 rounded text-center border border-yellow-200 dark:border-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">
+                            One party has signed. Awaiting the remaining signature.
+                          </div>
+                        )}
+                        <Button className="w-full" onClick={() => setIsSignOffModalOpen(true)}>
+                          Record Sign-Off
+                        </Button>
+                      </div>
                     )}
                   </div>
                 )}

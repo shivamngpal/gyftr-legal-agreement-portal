@@ -228,6 +228,21 @@ export class AgreementService {
   }
 
   static async recomputeAgreementStatus(tx: any, agreementId: string, actorId: string, targetDraftId: string) {
+    // Fetch current status first
+    const agreement = await tx.agreement.findUnique({
+      where: { id: agreementId },
+      select: { status: true }
+    });
+
+    // Never downgrade from these terminal states
+    if (
+      agreement?.status === 'PARTIALLY_SIGNED' ||
+      agreement?.status === 'EXECUTED' ||
+      agreement?.status === 'CANCELLED'
+    ) {
+      return;
+    }
+
     const latestDraft = await tx.draft.findFirst({
       where: { agreementId },
       orderBy: { version: "desc" },
@@ -246,7 +261,6 @@ export class AgreementService {
         newAgreementStatus = "IN_REVIEW";
       }
 
-      const agreement = await tx.agreement.findUnique({ where: { id: agreementId }, select: { status: true } });
       if (agreement && agreement.status !== newAgreementStatus) {
         await tx.agreement.update({
           where: { id: agreementId },

@@ -170,7 +170,27 @@ export default function DashboardPage() {
     if (status === "REJECTED") badgeVariant = "destructive";
     if (status === "PENDING") badgeVariant = "secondary";
     if (status === "UNDER_REVIEW") badgeVariant = "outline";
+    if (status === "UNDER_REVIEW") badgeVariant = "outline";
     return <Badge variant={badgeVariant}>{status}</Badge>;
+  };
+
+  const getAgreementStatusBadge = (status: string) => {
+    switch (status) {
+      case "DRAFT":
+        return <Badge variant="secondary">Draft</Badge>;
+      case "IN_REVIEW":
+        return <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300">In Review</Badge>;
+      case "PENDING_SIGNATURE":
+        return <Badge variant="outline" className="border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-900/30 dark:text-orange-300">Pending Signature</Badge>;
+      case "PARTIALLY_SIGNED":
+        return <Badge variant="outline" className="border-yellow-300 bg-yellow-100 text-yellow-800 dark:border-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300">Partially Signed</Badge>;
+      case "EXECUTED":
+        return <Badge variant="outline" className="border-green-300 bg-green-100 text-green-800 dark:border-green-800 dark:bg-green-900/30 dark:text-green-300">Executed</Badge>;
+      case "CANCELLED":
+        return <Badge variant="destructive">Cancelled</Badge>;
+      default:
+        return <Badge variant="outline">{status}</Badge>;
+    }
   };
 
   if (loading && agreements.length === 0) {
@@ -296,7 +316,7 @@ export default function DashboardPage() {
                   <TableCell className="font-medium">{agreement.clientName}</TableCell>
                   <TableCell>{agreement.type}</TableCell>
                   <TableCell>
-                    <Badge variant="outline">{agreement.status}</Badge>
+                    {getAgreementStatusBadge(agreement.status)}
                   </TableCell>
                   <TableCell>{getTeamStatus(agreement.drafts?.[0]?.reviewStatuses || [], "LEGAL")}</TableCell>
                   <TableCell>{getTeamStatus(agreement.drafts?.[0]?.reviewStatuses || [], "FINANCE")}</TableCell>
