@@ -38,6 +38,7 @@ export const updateReviewStatusSchema = z.object({
 
 export const createRemarkSchema = z.object({
   message: z.string().min(1, "Message cannot be empty"),
+  draftId: z.string().uuid("Invalid draft ID").optional(),
 });
 
 export const updateClausesSchema = z.object({

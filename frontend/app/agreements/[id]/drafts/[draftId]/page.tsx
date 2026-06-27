@@ -155,7 +155,7 @@ export default function DraftWorkspacePage() {
       setAgreement(data);
 
       // Fetch remarks
-      const remarksRes = await fetch(`http://localhost:5000/api/agreements/${id}/remarks`, {
+      const remarksRes = await fetch(`http://localhost:5000/api/agreements/${id}/remarks?draftId=${draftId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (remarksRes.ok) {
@@ -164,7 +164,7 @@ export default function DraftWorkspacePage() {
       }
 
       // Fetch history
-      const historyRes = await fetch(`http://localhost:5000/api/agreements/${id}/history`, {
+      const historyRes = await fetch(`http://localhost:5000/api/agreements/${id}/history?draftId=${draftId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (historyRes.ok) {
@@ -176,7 +176,7 @@ export default function DraftWorkspacePage() {
     } finally {
       setLoading(false);
     }
-  }, [id, token]);
+  }, [id, draftId, token]);
 
   useEffect(() => {
     fetchAgreement();
@@ -283,7 +283,7 @@ export default function DraftWorkspacePage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ message: newRemark }),
+        body: JSON.stringify({ message: newRemark, draftId: draftId }),
       });
 
       if (!res.ok) {

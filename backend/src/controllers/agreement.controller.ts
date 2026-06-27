@@ -164,7 +164,8 @@ export const deleteAgreement = async (req: Request, res: Response): Promise<void
 export const getRemarks = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = agreementIdSchema.parse(req.params);
-    const remarks = await AgreementService.getRemarks(id);
+    const draftId = req.query.draftId as string | undefined;
+    const remarks = await AgreementService.getRemarks(id, draftId);
     res.json(remarks);
   } catch (error: any) {
     if (error instanceof z.ZodError || error?.name === "ZodError") {
@@ -179,7 +180,7 @@ export const getRemarks = async (req: Request, res: Response): Promise<void> => 
 export const createRemark = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = agreementIdSchema.parse(req.params);
-    const { message } = createRemarkSchema.parse(req.body);
+    const { message, draftId } = createRemarkSchema.parse(req.body);
     const userId = (req as any).user?.userId;
 
     if (!userId) {
@@ -187,7 +188,7 @@ export const createRemark = async (req: Request, res: Response): Promise<void> =
       return;
     }
 
-    const remark = await AgreementService.createRemark(id, userId, message);
+    const remark = await AgreementService.createRemark(id, userId, message, draftId);
     res.status(201).json(remark);
   } catch (error: any) {
     if (error instanceof z.ZodError || error?.name === "ZodError") {
@@ -206,7 +207,8 @@ export const createRemark = async (req: Request, res: Response): Promise<void> =
 export const getHistory = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = agreementIdSchema.parse(req.params);
-    const history = await AgreementService.getHistory(id);
+    const draftId = req.query.draftId as string | undefined;
+    const history = await AgreementService.getHistory(id, draftId);
     res.json(history);
   } catch (error: any) {
     if (error instanceof z.ZodError || error?.name === "ZodError") {

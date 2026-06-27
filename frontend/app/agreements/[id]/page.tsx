@@ -49,6 +49,9 @@ interface Remark {
     name: string;
     role: string;
   };
+  draft?: {
+    version: number;
+  };
 }
 
 interface HistoryLog {
@@ -60,6 +63,9 @@ interface HistoryLog {
     id: string;
     name: string;
     role: string;
+  };
+  draft?: {
+    version: number;
   };
 }
 
@@ -94,6 +100,14 @@ export default function AgreementDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const [remarks, setRemarks] = useState<Remark[]>([]);
+  const [history, setHistory] = useState<HistoryLog[]>([]);
+  const [newRemark, setNewRemark] = useState("");
+  const [isSubmittingRemark, setIsSubmittingRemark] = useState(false);
+
   const fetchAgreement = useCallback(async () => {
     if (!token) return;
     setLoading(true);
@@ -114,6 +128,22 @@ export default function AgreementDetailsPage() {
       
       const data = await res.json();
       setAgreement(data);
+
+      // Fetch remarks
+      const remarksRes = await fetch(`http://localhost:5000/api/agreements/${id}/remarks`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (remarksRes.ok) {
+        setRemarks(await remarksRes.json());
+      }
+
+      // Fetch history
+      const historyRes = await fetch(`http://localhost:5000/api/agreements/${id}/history`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (historyRes.ok) {
+        setHistory(await historyRes.json());
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -125,8 +155,33 @@ export default function AgreementDetailsPage() {
     fetchAgreement();
   }, [fetchAgreement]);
 
-  const [isUploading, setIsUploading] = useState(false);
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const handleAddRemark = async () => {
+    if (!newRemark.trim() || !token) return;
+    setIsSubmittingRemark(true);
+    try {
+      const res = await fetch(`http://localhost:5000/api/agreements/${id}/remarks`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ message: newRemark }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || data.error || "Failed to add remark");
+      }
+
+      setNewRemark("");
+      fetchAgreement(); // Refetch to get new remarks and history
+      toast.success("Global remark added");
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setIsSubmittingRemark(false);
+    }
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -347,6 +402,93 @@ export default function AgreementDetailsPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Global Remarks & Discussion */}
+        <Card className="col-span-1 md:col-span-2 lg:col-span-3 mt-6">
+          <CardHeader>
+            <CardTitle className="text-lg">Remarks & Discussion</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-6">
+              {remarks.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No remarks yet.</p>
+              ) : (
+                remarks.map((remark) => (
+                  <div key={remark.id} className="p-4 border rounded-md">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center space-x-2">
+                        <h4 className="font-semibold text-sm">{remark.author.name}</h4>
+                        <Badge variant="outline" className="text-[10px] h-5 px-1.5">{remark.author.role}</Badge>
+                        {remark.draft && (
+                          <Badge variant="secondary" className="text-[10px] h-5 px-1.5 ml-2">
+                            Draft V{remark.draft.version}
+                          </Badge>
+                        )}
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(remark.createdAt).toLocaleString()}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                      {remark.message}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+            
+            <div className="mt-6 border-t pt-4">
+              <textarea
+                value={newRemark}
+                onChange={(e) => setNewRemark(e.target.value)}
+                placeholder="Type a global remark here..."
+                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              />
+              <div className="flex justify-end mt-3">
+                <Button 
+                  onClick={handleAddRemark} 
+                  disabled={isSubmittingRemark || !newRemark.trim()}
+                >
+                  {isSubmittingRemark ? "Submitting..." : "Post Remark"}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* History Timeline */}
+        <Card className="col-span-1 md:col-span-2 lg:col-span-3 mt-6">
+          <CardHeader>
+            <CardTitle className="text-lg">History Timeline</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {history.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No history available yet.</p>
+            ) : (
+              <div className="relative border-l ml-3 pl-6 space-y-6">
+                {history.map((log) => (
+                  <div key={log.id} className="relative">
+                    <div className="absolute -left-[31px] top-1 h-4 w-4 rounded-full border-2 border-primary bg-background" />
+                    <div className="flex flex-col space-y-1">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm font-semibold">{log.actor.name}</span>
+                        <Badge variant="outline" className="text-[10px] h-4 px-1">{log.actor.role}</Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(log.timestamp).toLocaleString()}
+                        </span>
+                      </div>
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{log.action.replace(/_/g, ' ')}</p>
+                      {log.details && (
+                        <p className="text-sm text-gray-600 dark:text-gray-400">{log.details}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
       </div>
     </div>
   );

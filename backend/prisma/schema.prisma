@@ -107,6 +107,8 @@ model Remark {
   id          String    @id @default(uuid())
   agreementId String
   agreement   Agreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  draftId     String?
+  draft       Draft?    @relation(fields: [draftId], references: [id], onDelete: Cascade)
   authorId    String
   author      User      @relation(fields: [authorId], references: [id])
   message     String
@@ -117,6 +119,8 @@ model HistoryLog {
   id          String    @id @default(uuid())
   agreementId String
   agreement   Agreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  draftId     String?
+  draft       Draft?    @relation(fields: [draftId], references: [id], onDelete: Cascade)
   actorId     String
   actor       User      @relation("HistoryActor", fields: [actorId], references: [id])
   action      String // e.g., "STATUS_CHANGE", "REMINDER_SENT", "SIGNED_OFF"
@@ -134,6 +138,8 @@ model Draft {
 
   clauses        Clause[]
   reviewStatuses ReviewStatus[]
+  remarks        Remark[]
+  historyLogs    HistoryLog[]
 }
 
 model Clause {

@@ -73,6 +73,7 @@ export class AgreementService {
       await tx.historyLog.create({
         data: {
           agreementId,
+          draftId: draft.id,
           actorId,
           action: "DRAFT_UPLOADED",
           details: `Uploaded Draft Version ${nextVersion}`,
@@ -83,6 +84,7 @@ export class AgreementService {
       await tx.historyLog.create({
         data: {
           agreementId,
+          draftId: draft.id,
           actorId,
           action: "CLAUSES_EXTRACTED",
           details: `AI extracted ${extractedClauses.length} clauses from Draft Version ${nextVersion}`,
@@ -212,6 +214,7 @@ export class AgreementService {
       await tx.historyLog.create({
         data: {
           agreementId,
+          draftId: targetDraftId,
           actorId,
           action: "STATUS_CHANGE",
           details: `${team} status changed from ${reviewStatus.status} to ${newStatus}`,
@@ -247,6 +250,7 @@ export class AgreementService {
           await tx.historyLog.create({
             data: {
               agreementId,
+              draftId: targetDraftId,
               actorId,
               action: "STATUS_CHANGE",
               details: `Agreement status automatically changed from ${agreement.status} to ${newAgreementStatus}`,
@@ -276,19 +280,26 @@ export class AgreementService {
     });
   }
 
-  static async getRemarks(agreementId: string) {
+  static async getRemarks(agreementId: string, draftId?: string) {
     return await prisma.remark.findMany({
-      where: { agreementId },
+      where: draftId ? { agreementId, draftId } : { agreementId },
       orderBy: { createdAt: "desc" },
       include: {
         author: { select: { id: true, name: true, role: true } },
+        draft: { select: { version: true } },
       },
     });
   }
 
-  static async createRemark(agreementId: string, authorId: string, message: string) {
+  static async createRemark(agreementId: string, authorId: string, message: string, draftId?: string) {
     const agreement = await prisma.agreement.findUnique({ where: { id: agreementId } });
     if (!agreement) throw new Error("Agreement not found");
+
+    let draftVersion: number | undefined;
+    if (draftId) {
+      const draft = await prisma.draft.findUnique({ where: { id: draftId } });
+      if (draft) draftVersion = draft.version;
+    }
 
     return await prisma.$transaction(async (tx) => {
       const remark = await tx.remark.create({
@@ -296,18 +307,21 @@ export class AgreementService {
           agreementId,
           authorId,
           message,
+          draftId: draftId || null,
         },
         include: {
           author: { select: { id: true, name: true, role: true } },
+          draft: { select: { version: true } },
         },
       });
 
       await tx.historyLog.create({
         data: {
           agreementId,
+          draftId: draftId || null,
           actorId: authorId,
           action: "REMARK_ADDED",
-          details: `Added a remark: "${message.length > 50 ? message.substring(0, 50) + "..." : message}"`,
+          details: `Added a ${draftId ? `remark on Draft Version ${draftVersion}` : 'global remark'}: "${message.length > 50 ? message.substring(0, 50) + "..." : message}"`,
         },
       });
 
@@ -315,12 +329,13 @@ export class AgreementService {
     });
   }
 
-  static async getHistory(agreementId: string) {
+  static async getHistory(agreementId: string, draftId?: string) {
     return await prisma.historyLog.findMany({
-      where: { agreementId },
+      where: draftId ? { agreementId, draftId } : { agreementId },
       orderBy: { timestamp: "desc" },
       include: {
         actor: { select: { id: true, name: true, role: true } },
+        draft: { select: { version: true } },
       },
     });
   }

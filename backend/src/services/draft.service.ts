@@ -64,6 +64,7 @@ export class DraftService {
       await tx.historyLog.create({
         data: {
           agreementId: draft.agreementId,
+          draftId: draft.id,
           action: "CLAUSE_REVIEW_COMPLETED",
           details: `Legal reviewed clauses for Draft Version ${draft.version}`,
           actorId: userId,
