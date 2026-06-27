@@ -32,11 +32,12 @@ export class AgreementService {
       throw new Error("Could not extract text from PDF. The document may be empty or scanned.");
     }
 
-    // 2. Upload to S3
-    const fileUrl = await S3Service.uploadPdf(fileBuffer, fileName, agreementId);
-
-    // 3. Extract Clauses via AI
-    const extractedClauses = await AIService.extractClauses(pdfText);
+    // 2. Upload to S3 and extract clauses in parallel (they're independent)
+    const truncatedText = pdfText.length > 15000 ? pdfText.slice(0, 15000) : pdfText;
+    const [fileUrl, extractedClauses] = await Promise.all([
+      S3Service.uploadPdf(fileBuffer, fileName, agreementId),
+      AIService.extractClauses(truncatedText),
+    ]);
 
     return await prisma.$transaction(async (tx) => {
       // Get max version

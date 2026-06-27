@@ -149,6 +149,32 @@ const renderRightDiff = (oldText: string, newText: string) => {
   });
 };
 
+const renderInlineDiff = (oldText: string, newText: string) => {
+  const diffs = diff.diffWords(oldText || "", newText || "");
+  return diffs.map((part, idx) => {
+    if (part.removed) {
+      return <span key={idx} className="bg-red-100 text-red-700 line-through rounded px-0.5 dark:bg-red-900/30 dark:text-red-300">{part.value}</span>;
+    }
+    if (part.added) {
+      return <span key={idx} className="bg-green-100 text-green-800 rounded px-0.5 dark:bg-green-900/30 dark:text-green-200">{part.value}</span>;
+    }
+    return <span key={idx}>{part.value}</span>;
+  });
+};
+
+const getOutcomeBadge = (outcome: string) => {
+  switch (outcome) {
+    case "ACCEPTED":
+      return <Badge variant="outline" className="text-xs border-green-300 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900/30 dark:text-green-300">Accepted</Badge>;
+    case "HELD":
+      return <Badge variant="destructive" className="text-xs">Held</Badge>;
+    case "PARTIAL":
+      return <Badge variant="outline" className="text-xs border-yellow-300 bg-yellow-50 text-yellow-700 dark:border-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300">Partial</Badge>;
+    default:
+      return <Badge variant="secondary" className="text-xs">Pending</Badge>;
+  }
+};
+
 const agreementTypeLabels: Record<string, string> = {
   API_DIRECT: 'API / Direct',
   WHITE_LABEL: 'White Label',
@@ -169,10 +195,12 @@ interface WorkspacePdfLayoutProps {
   fileUrl?: string;
   headerContent?: React.ReactNode;
   children: React.ReactNode;
+  clauses?: Clause[];
 }
 
-const WorkspacePdfLayout = React.memo(({ fileUrl, headerContent, children }: WorkspacePdfLayoutProps) => {
+const WorkspacePdfLayout = React.memo(({ fileUrl, headerContent, children, clauses }: WorkspacePdfLayoutProps) => {
   const [isDocVisible, setIsDocVisible] = useState(false);
+  const [rightView, setRightView] = useState<"pdf" | "draft">("pdf");
 
   return (
     <div className="flex flex-col">
@@ -181,9 +209,33 @@ const WorkspacePdfLayout = React.memo(({ fileUrl, headerContent, children }: Wor
           {headerContent}
         </div>
         {fileUrl && (
-          <div>
-            <Button onClick={() => setIsDocVisible(!isDocVisible)}>
-              {isDocVisible ? "Hide PDF" : "View PDF"}
+          <div className="flex items-center gap-2">
+            {isDocVisible && (
+              <div className="flex rounded-md border overflow-hidden">
+                <Button
+                  size="sm"
+                  variant={rightView === "pdf" ? "default" : "ghost"}
+                  className="rounded-none h-8 px-3 text-xs"
+                  onClick={() => setRightView("pdf")}
+                >
+                  PDF
+                </Button>
+                <Button
+                  size="sm"
+                  variant={rightView === "draft" ? "default" : "ghost"}
+                  className="rounded-none border-l h-8 px-3 text-xs"
+                  onClick={() => setRightView("draft")}
+                >
+                  Live Draft
+                </Button>
+              </div>
+            )}
+            <Button
+              size="sm"
+              variant={isDocVisible ? "outline" : "default"}
+              onClick={() => setIsDocVisible(!isDocVisible)}
+            >
+              {isDocVisible ? "Hide" : "View Document"}
             </Button>
           </div>
         )}
@@ -197,14 +249,46 @@ const WorkspacePdfLayout = React.memo(({ fileUrl, headerContent, children }: Wor
               {children}
             </div>
           </Panel>
-          {/* Right Panel - PDF Viewer */}
-          {isDocVisible && fileUrl && (
+          {/* Right Panel — PDF or Live Draft */}
+          {isDocVisible && (
             <>
               <PanelResizeHandle className="w-2 bg-gray-200 cursor-col-resize hover:bg-gray-300 active:bg-blue-500 transition-colors mx-4 rounded-full" />
               <Panel defaultSize={60} minSize={30}>
-                <div className="w-full h-full border rounded-lg overflow-hidden bg-white shadow-sm flex-shrink-0">
-                  <iframe src={fileUrl} className="w-full h-full border-0" title="PDF Viewer" />
-                </div>
+                {rightView === "pdf" && fileUrl ? (
+                  <div className="w-full h-full border rounded-lg overflow-hidden bg-white shadow-sm flex-shrink-0">
+                    <iframe src={fileUrl} className="w-full h-full border-0" title="PDF Viewer" />
+                  </div>
+                ) : (
+                  <div className="w-full h-full border rounded-lg overflow-y-auto bg-white shadow-sm">
+                    {clauses && clauses.length > 0 ? (
+                      <div className="max-w-2xl mx-auto py-6 px-4 space-y-4">
+                        {clauses.map((clause) => (
+                          <div key={clause.id} className="rounded-lg border overflow-hidden shadow-xs">
+                            <div className="bg-gray-50 dark:bg-gray-900 px-4 py-2 border-b flex items-center justify-between gap-2">
+                              <span className="font-semibold text-sm">{clause.identifier}</span>
+                              {getOutcomeBadge(clause.outcome)}
+                            </div>
+                            <div className="flex">
+                              <div className="flex-1 p-4 text-sm text-gray-800 dark:text-gray-200 leading-relaxed whitespace-pre-wrap">
+                                {clause.text}
+                              </div>
+                              {clause.comments && (
+                                <div className="w-36 shrink-0 border-l bg-amber-50 dark:bg-amber-900/20 p-3">
+                                  <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-1">Legal Note</p>
+                                  <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">{clause.comments}</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center h-full">
+                        <p className="text-sm text-muted-foreground">No clauses extracted for this draft.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </Panel>
             </>
           )}
@@ -329,18 +413,24 @@ export default function DraftWorkspacePage() {
 
   const diffResults = useMemo(() => {
     if (!comparisonData?.comparisons) return [];
-    
-    return comparisonData.comparisons.map(pair => ({
-      identifier: pair.currentClause.identifier,
-      leftDiff: pair.baseClause 
-        ? renderLeftDiff(pair.baseClause.text, pair.currentClause.text)
-        : null,
-      rightDiff: pair.baseClause
-        ? renderRightDiff(pair.baseClause.text, pair.currentClause.text)
-        : null,
-      currentClause: pair.currentClause,
-      baseClause: pair.baseClause
-    }));
+
+    return comparisonData.comparisons.map(pair => {
+      const hasDiff = pair.baseClause
+        ? pair.baseClause.text !== pair.currentClause.text
+        : false;
+      return {
+        identifier: pair.currentClause.identifier,
+        hasDiff,
+        leftDiff: pair.baseClause
+          ? renderLeftDiff(pair.baseClause.text, pair.currentClause.text)
+          : null,
+        rightDiff: pair.baseClause
+          ? renderRightDiff(pair.baseClause.text, pair.currentClause.text)
+          : null,
+        currentClause: pair.currentClause,
+        baseClause: pair.baseClause
+      };
+    });
   }, [comparisonData]);
 
   useEffect(() => {
@@ -519,19 +609,6 @@ export default function DraftWorkspacePage() {
     return <Badge variant={badgeVariant}>{status}</Badge>;
   };
 
-  const getOutcomeBadge = (outcome: string) => {
-    switch (outcome) {
-      case "ACCEPTED":
-        return <Badge variant="outline" className="text-xs border-green-300 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900/30 dark:text-green-300">Accepted</Badge>;
-      case "HELD":
-        return <Badge variant="destructive" className="text-xs">Held</Badge>;
-      case "PARTIAL":
-        return <Badge variant="outline" className="text-xs border-yellow-300 bg-yellow-50 text-yellow-700 dark:border-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300">Partial</Badge>;
-      default:
-        return <Badge variant="secondary" className="text-xs">Pending</Badge>;
-    }
-  };
-
   if (loading) {
     return (
       <div className="space-y-6 p-8">
@@ -595,6 +672,7 @@ export default function DraftWorkspacePage() {
       
       <WorkspacePdfLayout
         fileUrl={currentDraft?.fileUrl}
+        clauses={clauses}
         headerContent={
           <div className="flex flex-col sm:flex-row sm:items-center space-y-4 sm:space-y-0">
             <div className="flex items-center space-x-4">
@@ -932,7 +1010,7 @@ export default function DraftWorkspacePage() {
                                             {cell ? (
                                               <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
                                                 {prevCell
-                                                  ? renderRightDiff(prevCell.text, cell.text)
+                                                  ? renderInlineDiff(prevCell.text, cell.text)
                                                   : cell.text}
                                               </p>
                                             ) : (
@@ -1027,14 +1105,38 @@ export default function DraftWorkspacePage() {
                   <p className="text-sm text-muted-foreground">No clauses are available for this draft.</p>
                 ) : (
                   <div className="space-y-6">
+                    {/* Diff summary bar */}
+                    {comparisonData.baseDraft && (() => {
+                      const changedCount = diffResults.filter(r => r.hasDiff).length;
+                      const newCount = diffResults.filter(r => !r.baseClause).length;
+                      const unchangedCount = diffResults.filter(r => r.baseClause && !r.hasDiff).length;
+                      return (
+                        <div className="flex items-center gap-4 text-xs bg-gray-50 dark:bg-gray-900 border rounded-md px-4 py-2.5">
+                          <span className="text-muted-foreground">V{comparisonData.baseDraft.version} → V{comparisonData.currentDraft.version}</span>
+                          <span className="h-3 w-px bg-border" />
+                          {changedCount > 0 && <span className="font-medium text-blue-600 dark:text-blue-400">{changedCount} changed</span>}
+                          {newCount > 0 && <span className="font-medium text-green-600 dark:text-green-400">{newCount} new</span>}
+                          {unchangedCount > 0 && <span className="text-muted-foreground">{unchangedCount} unchanged</span>}
+                          {changedCount === 0 && newCount === 0 && <span className="text-muted-foreground">No differences detected</span>}
+                        </div>
+                      );
+                    })()}
                     {diffResults.map((comp, idx) => {
                       const currentOutcome = editedClauses[comp.currentClause.id]?.outcome || comp.currentClause.outcome;
                       const currentComments = editedClauses[comp.currentClause.id]?.comments ?? (comp.currentClause.comments || "");
                       
                       return (
                         <div key={idx} className="border rounded-md overflow-hidden">
-                          <div className="bg-gray-50 dark:bg-gray-900 border-b px-4 py-2">
+                          <div className="bg-gray-50 dark:bg-gray-900 border-b px-4 py-2 flex items-center justify-between gap-2">
                             <h4 className="font-semibold text-sm">{comp.identifier}</h4>
+                            {comp.baseClause && (
+                              comp.hasDiff
+                                ? <Badge variant="outline" className="text-[11px] border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300">Changed</Badge>
+                                : <Badge variant="secondary" className="text-[11px] text-muted-foreground">Unchanged</Badge>
+                            )}
+                            {!comp.baseClause && (
+                              <Badge variant="outline" className="text-[11px] border-green-300 bg-green-50 text-green-700 dark:border-green-700 dark:bg-green-900/30 dark:text-green-300">New</Badge>
+                            )}
                           </div>
                           <div className="grid grid-cols-2 divide-x">
                             <div className="p-4">
