@@ -17,6 +17,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import * as diff from "diff";
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from "react-resizable-panels";
 
@@ -60,6 +67,15 @@ interface HistoryLog {
   timestamp: string;
   actor: {
     id: string;
+    name: string;
+    role: string;
+  };
+}
+
+interface SignOff {
+  id: string;
+  timestamp: string;
+  signatory: {
     name: string;
     role: string;
   };
@@ -127,12 +143,15 @@ export default function DraftWorkspacePage() {
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
   const [remarks, setRemarks] = useState<Remark[]>([]);
   const [history, setHistory] = useState<HistoryLog[]>([]);
+  const [signOffs, setSignOffs] = useState<SignOff[]>([]);
   const [clauses, setClauses] = useState<Clause[]>([]);
   const [newRemark, setNewRemark] = useState("");
   const [isSubmittingRemark, setIsSubmittingRemark] = useState(false);
   const [editedClauses, setEditedClauses] = useState<Record<string, { outcome: string, comments: string }>>({});
   const [isSavingClauses, setIsSavingClauses] = useState(false);
   const [isDocVisible, setIsDocVisible] = useState(false);
+  const [isSignOffModalOpen, setIsSignOffModalOpen] = useState(false);
+  const [isSubmittingSignOff, setIsSubmittingSignOff] = useState(false);
   const selectedDraftId = draftId;
 
   const fetchAgreement = useCallback(async () => {
@@ -173,12 +192,45 @@ export default function DraftWorkspacePage() {
         const historyData = await historyRes.json();
         setHistory(historyData);
       }
+
+      // Fetch sign-offs
+      const signOffsRes = await fetch(`http://localhost:5000/api/agreements/${id}/signoff`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (signOffsRes.ok) {
+        const signOffsData = await signOffsRes.json();
+        setSignOffs(signOffsData);
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
   }, [id, draftId, token]);
+
+  const handleRecordSignOff = async () => {
+    if (!token) return;
+    setIsSubmittingSignOff(true);
+    try {
+      const res = await fetch(`http://localhost:5000/api/agreements/${id}/signoff`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || data.error || "Failed to record sign-off");
+      }
+      
+      toast.success("Sign-off recorded successfully");
+      setIsSignOffModalOpen(false);
+      fetchAgreement(); // Refresh both signoffs and team review statuses
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setIsSubmittingSignOff(false);
+    }
+  };
 
   useEffect(() => {
     fetchAgreement();
@@ -749,9 +801,78 @@ export default function DraftWorkspacePage() {
             </Card>
           )}
           <PlaceholderCard title="Reminders" />
-              <PlaceholderCard title="Sign-off" />
+
+          {/* Sign-Off Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Sign-offs</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {signOffs.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No sign-offs recorded yet.</p>
+                ) : (
+                  signOffs.map((signOff) => (
+                    <div key={signOff.id} className="flex items-center justify-between p-3 border rounded-md bg-gray-50/50">
+                      <div>
+                        <div className="flex items-center space-x-2">
+                          <p className="text-sm font-semibold">{signOff.signatory.name}</p>
+                          <Badge variant="outline" className="text-[10px] h-4 px-1">{signOff.signatory.role}</Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {new Date(signOff.timestamp).toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="text-green-600 flex items-center space-x-1">
+                        <span className="text-sm font-medium">Signed</span>
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    </div>
+                  ))
+                )}
+                {user && (user.role === "LEGAL" || user.role === "BUSINESS") && (
+                  <div className="pt-4 border-t mt-4">
+                    {signOffs.some(s => s.signatory.name === user.name && s.signatory.role === user.role) ? (
+                      <p className="text-sm font-medium text-green-600 flex items-center justify-center space-x-2 py-2">
+                        <span>You have signed this agreement</span>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </p>
+                    ) : (
+                      <Button className="w-full" onClick={() => setIsSignOffModalOpen(true)}>
+                        Record Sign-Off
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
             </div>
           </Panel>
+
+          {/* Sign-Off Confirmation Modal */}
+          <Dialog open={isSignOffModalOpen} onOpenChange={setIsSignOffModalOpen}>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Confirm Sign-Off</DialogTitle>
+                <DialogDescription className="pt-4 text-gray-700">
+                  By clicking confirm, you are recording a digital sign-off for this agreement as <strong>{user?.name} ({user?.role})</strong>. This action is permanent and will be logged.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex justify-end space-x-2 mt-6">
+                <Button variant="outline" onClick={() => setIsSignOffModalOpen(false)} disabled={isSubmittingSignOff}>
+                  Cancel
+                </Button>
+                <Button onClick={handleRecordSignOff} disabled={isSubmittingSignOff}>
+                  {isSubmittingSignOff ? "Recording..." : "Confirm Sign-Off"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
 
           {/* Right Panel - PDF Viewer */}
           {isDocVisible && (

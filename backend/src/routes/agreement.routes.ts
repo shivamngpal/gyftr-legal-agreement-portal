@@ -12,6 +12,7 @@ import {
   createRemark,
   getHistory
 } from "../controllers/agreement.controller";
+import { createSignOff, getSignOffs } from "../controllers/signoff.controller";
 import { authenticate } from "../middleware/auth.middleware";
 import { authorizeRoles } from "../middleware/role.middleware";
 
@@ -42,6 +43,10 @@ router.post("/:id/remarks", createRemark);
 
 // History -> Any authenticated user
 router.get("/:id/history", getHistory);
+
+// SignOff -> POST requires LEGAL/BUSINESS, GET is Any authenticated user
+router.post("/:id/signoff", createSignOff);
+router.get("/:id/signoff", getSignOffs);
 
 // Update Agreement -> LEGAL only
 router.put("/:id", authorizeRoles("LEGAL"), updateAgreement);

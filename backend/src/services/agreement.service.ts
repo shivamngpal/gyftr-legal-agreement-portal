@@ -221,46 +221,49 @@ export class AgreementService {
         },
       });
 
-      // Derive the overall Agreement status from the latest draft's review statuses
-      const latestDraft = await tx.draft.findFirst({
-        where: { agreementId },
-        orderBy: { version: "desc" },
-        include: { reviewStatuses: true },
-      });
-
-      if (latestDraft) {
-        const statuses = latestDraft.reviewStatuses.map(rs => rs.status);
-        let newAgreementStatus: "DRAFT" | "IN_REVIEW" | "PENDING_SIGNATURE" | "EXECUTED" | "CANCELLED" = "DRAFT";
-
-        if (statuses.length === 4 && statuses.every(s => s === "APPROVED")) {
-          newAgreementStatus = "PENDING_SIGNATURE";
-        } else if (statuses.some(s => s === "REJECTED")) {
-          newAgreementStatus = "IN_REVIEW";
-        } else if (statuses.some(s => s === "UNDER_REVIEW" || s === "APPROVED")) {
-          newAgreementStatus = "IN_REVIEW";
-        }
-
-        const agreement = await tx.agreement.findUnique({ where: { id: agreementId }, select: { status: true } });
-        if (agreement && agreement.status !== newAgreementStatus) {
-          await tx.agreement.update({
-            where: { id: agreementId },
-            data: { status: newAgreementStatus },
-          });
-
-          await tx.historyLog.create({
-            data: {
-              agreementId,
-              draftId: targetDraftId,
-              actorId,
-              action: "STATUS_CHANGE",
-              details: `Agreement status automatically changed from ${agreement.status} to ${newAgreementStatus}`,
-            },
-          });
-        }
-      }
+      await AgreementService.recomputeAgreementStatus(tx, agreementId, actorId, targetDraftId);
 
       return updated;
     });
+  }
+
+  static async recomputeAgreementStatus(tx: any, agreementId: string, actorId: string, targetDraftId: string) {
+    const latestDraft = await tx.draft.findFirst({
+      where: { agreementId },
+      orderBy: { version: "desc" },
+      include: { reviewStatuses: true },
+    });
+
+    if (latestDraft) {
+      const statuses = latestDraft.reviewStatuses.map((rs: any) => rs.status);
+      let newAgreementStatus: "DRAFT" | "IN_REVIEW" | "PENDING_SIGNATURE" | "EXECUTED" | "CANCELLED" = "DRAFT";
+
+      if (statuses.length === 4 && statuses.every((s: string) => s === "APPROVED")) {
+        newAgreementStatus = "PENDING_SIGNATURE";
+      } else if (statuses.some((s: string) => s === "REJECTED")) {
+        newAgreementStatus = "IN_REVIEW";
+      } else if (statuses.some((s: string) => s === "UNDER_REVIEW" || s === "APPROVED")) {
+        newAgreementStatus = "IN_REVIEW";
+      }
+
+      const agreement = await tx.agreement.findUnique({ where: { id: agreementId }, select: { status: true } });
+      if (agreement && agreement.status !== newAgreementStatus) {
+        await tx.agreement.update({
+          where: { id: agreementId },
+          data: { status: newAgreementStatus },
+        });
+
+        await tx.historyLog.create({
+          data: {
+            agreementId,
+            draftId: targetDraftId,
+            actorId,
+            action: "STATUS_CHANGE",
+            details: `Agreement status automatically changed from ${agreement.status} to ${newAgreementStatus}`,
+          },
+        });
+      }
+    }
   }
 
   static async updateAgreement(id: string, data: UpdateAgreementRequest) {
