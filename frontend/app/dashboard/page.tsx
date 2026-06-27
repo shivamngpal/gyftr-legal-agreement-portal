@@ -47,11 +47,28 @@ interface Agreement {
   drafts?: { reviewStatuses: ReviewStatus[] }[];
 }
 
+const agreementTypeLabels: Record<string, string> = {
+  API_DIRECT: 'API / Direct',
+  WHITE_LABEL: 'White Label',
+  RESELLER: 'Reseller',
+  ENTERPRISE: 'Enterprise'
+};
+
+const agreementStatusLabels: Record<string, string> = {
+  DRAFT: 'Draft',
+  IN_REVIEW: 'In Review',
+  PENDING_SIGNATURE: 'Pending Signature',
+  PARTIALLY_SIGNED: 'Partially Signed',
+  EXECUTED: 'Executed',
+  CANCELLED: 'Cancelled'
+};
+
 export default function DashboardPage() {
   const { user, token } = useAuth();
   const router = useRouter();
   
   const [agreements, setAgreements] = useState<Agreement[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,6 +79,10 @@ export default function DashboardPage() {
     clientName: "",
     type: "",
     startDate: "",
+    legalSpocId: "",
+    financeSpocId: "",
+    businessSpocId: "",
+    complianceSpocId: "",
   });
 
   const [isRemindModalOpen, setIsRemindModalOpen] = useState(false);
@@ -77,12 +98,23 @@ export default function DashboardPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("http://localhost:5000/api/agreements", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error("Failed to fetch agreements");
-      const data = await res.json();
+      const [agreementsRes, usersRes] = await Promise.all([
+        fetch("http://localhost:5000/api/agreements", {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch("http://localhost:5000/api/users", {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+      ]);
+      
+      if (!agreementsRes.ok) throw new Error("Failed to fetch agreements");
+      const data = await agreementsRes.json();
       setAgreements(data);
+
+      if (usersRes.ok) {
+        const usersData = await usersRes.json();
+        setUsers(usersData);
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -110,6 +142,10 @@ export default function DashboardPage() {
           clientName: formData.clientName,
           type: formData.type,
           startDate: new Date(formData.startDate).toISOString(),
+          legalSpocId: formData.legalSpocId || undefined,
+          financeSpocId: formData.financeSpocId || undefined,
+          businessSpocId: formData.businessSpocId || undefined,
+          complianceSpocId: formData.complianceSpocId || undefined,
         }),
       });
 
@@ -120,7 +156,7 @@ export default function DashboardPage() {
 
       toast.success("Agreement created successfully");
       setIsModalOpen(false);
-      setFormData({ clientName: "", type: "", startDate: "" });
+      setFormData({ clientName: "", type: "", startDate: "", legalSpocId: "", financeSpocId: "", businessSpocId: "", complianceSpocId: "" });
       fetchAgreements(); // Refresh the list
     } catch (err: any) {
       toast.error(err.message);
@@ -175,21 +211,22 @@ export default function DashboardPage() {
   };
 
   const getAgreementStatusBadge = (status: string) => {
+    const label = agreementStatusLabels[status] || status;
     switch (status) {
       case "DRAFT":
-        return <Badge variant="secondary">Draft</Badge>;
+        return <Badge variant="secondary">{label}</Badge>;
       case "IN_REVIEW":
-        return <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300">In Review</Badge>;
+        return <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300">{label}</Badge>;
       case "PENDING_SIGNATURE":
-        return <Badge variant="outline" className="border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-900/30 dark:text-orange-300">Pending Signature</Badge>;
+        return <Badge variant="outline" className="border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-900/30 dark:text-orange-300">{label}</Badge>;
       case "PARTIALLY_SIGNED":
-        return <Badge variant="outline" className="border-yellow-300 bg-yellow-100 text-yellow-800 dark:border-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300">Partially Signed</Badge>;
+        return <Badge variant="outline" className="border-yellow-300 bg-yellow-100 text-yellow-800 dark:border-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300">{label}</Badge>;
       case "EXECUTED":
-        return <Badge variant="outline" className="border-green-300 bg-green-100 text-green-800 dark:border-green-800 dark:bg-green-900/30 dark:text-green-300">Executed</Badge>;
+        return <Badge variant="outline" className="border-green-300 bg-green-100 text-green-800 dark:border-green-800 dark:bg-green-900/30 dark:text-green-300">{label}</Badge>;
       case "CANCELLED":
-        return <Badge variant="destructive">Cancelled</Badge>;
+        return <Badge variant="destructive">{label}</Badge>;
       default:
-        return <Badge variant="outline">{status}</Badge>;
+        return <Badge variant="outline">{label}</Badge>;
     }
   };
 
@@ -277,6 +314,64 @@ export default function DashboardPage() {
                       disabled={isSubmitting}
                     />
                   </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Legal SPOC</Label>
+                      <Select
+                        value={formData.legalSpocId}
+                        onValueChange={(val) => setFormData({ ...formData, legalSpocId: val || "" })}
+                      >
+                        <SelectTrigger><SelectValue placeholder="Select SPOC" /></SelectTrigger>
+                        <SelectContent>
+                          {users.filter(u => u.role === "LEGAL").map(u => (
+                            <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Finance SPOC</Label>
+                      <Select
+                        value={formData.financeSpocId}
+                        onValueChange={(val) => setFormData({ ...formData, financeSpocId: val || "" })}
+                      >
+                        <SelectTrigger><SelectValue placeholder="Select SPOC" /></SelectTrigger>
+                        <SelectContent>
+                          {users.filter(u => u.role === "FINANCE").map(u => (
+                            <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Business SPOC</Label>
+                      <Select
+                        value={formData.businessSpocId}
+                        onValueChange={(val) => setFormData({ ...formData, businessSpocId: val || "" })}
+                      >
+                        <SelectTrigger><SelectValue placeholder="Select SPOC" /></SelectTrigger>
+                        <SelectContent>
+                          {users.filter(u => u.role === "BUSINESS").map(u => (
+                            <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Compliance SPOC</Label>
+                      <Select
+                        value={formData.complianceSpocId}
+                        onValueChange={(val) => setFormData({ ...formData, complianceSpocId: val || "" })}
+                      >
+                        <SelectTrigger><SelectValue placeholder="Select SPOC" /></SelectTrigger>
+                        <SelectContent>
+                          {users.filter(u => u.role === "COMPLIANCE").map(u => (
+                            <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
                   <Button type="submit" className="w-full" disabled={isSubmitting}>
                     {isSubmitting ? "Creating..." : "Create Agreement"}
                   </Button>
@@ -314,7 +409,7 @@ export default function DashboardPage() {
                   onClick={() => router.push(`/agreements/${agreement.id}`)}
                 >
                   <TableCell className="font-medium">{agreement.clientName}</TableCell>
-                  <TableCell>{agreement.type}</TableCell>
+                  <TableCell>{agreementTypeLabels[agreement.type] || agreement.type}</TableCell>
                   <TableCell>
                     {getAgreementStatusBadge(agreement.status)}
                   </TableCell>

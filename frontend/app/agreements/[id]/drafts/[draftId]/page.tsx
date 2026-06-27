@@ -132,8 +132,24 @@ const renderRightDiff = (oldText: string, newText: string) => {
   });
 };
 
+const agreementTypeLabels: Record<string, string> = {
+  API_DIRECT: 'API / Direct',
+  WHITE_LABEL: 'White Label',
+  RESELLER: 'Reseller',
+  ENTERPRISE: 'Enterprise'
+};
+
+const agreementStatusLabels: Record<string, string> = {
+  DRAFT: 'Draft',
+  IN_REVIEW: 'In Review',
+  PENDING_SIGNATURE: 'Pending Signature',
+  PARTIALLY_SIGNED: 'Partially Signed',
+  EXECUTED: 'Executed',
+  CANCELLED: 'Cancelled'
+};
+
 export default function DraftWorkspacePage() {
-  const { id, draftId } = useParams() as { id: string, draftId: string };
+  const { id, draftId } = useParams() as { id: string; draftId: string };
   const { user, token } = useAuth();
   const router = useRouter();
 
@@ -456,6 +472,26 @@ export default function DraftWorkspacePage() {
 
   const currentDraft = agreement.drafts?.find((d) => d.id === draftId);
 
+  const getAgreementStatusBadge = (status: string) => {
+    const label = agreementStatusLabels[status] || status;
+    switch (status) {
+      case "DRAFT":
+        return <Badge variant="secondary">{label}</Badge>;
+      case "IN_REVIEW":
+        return <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300">{label}</Badge>;
+      case "PENDING_SIGNATURE":
+        return <Badge variant="outline" className="border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-900/30 dark:text-orange-300">{label}</Badge>;
+      case "PARTIALLY_SIGNED":
+        return <Badge variant="outline" className="border-yellow-300 bg-yellow-100 text-yellow-800 dark:border-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300">{label}</Badge>;
+      case "EXECUTED":
+        return <Badge variant="outline" className="border-green-300 bg-green-100 text-green-800 dark:border-green-800 dark:bg-green-900/30 dark:text-green-300">{label}</Badge>;
+      case "CANCELLED":
+        return <Badge variant="destructive">{label}</Badge>;
+      default:
+        return <Badge variant="outline">{label}</Badge>;
+    }
+  };
+
   return (
     <div className="space-y-8 pb-10">
       {/* Header Area */}
@@ -471,6 +507,10 @@ export default function DraftWorkspacePage() {
               {agreement.clientName} - Draft Version {currentDraft?.version || "Unknown"}
             </h2>
             <div className="flex items-center space-x-2 mt-1">
+              <Badge variant="outline">{agreementTypeLabels[agreement.type] || agreement.type}</Badge>
+              <span className="text-gray-400">•</span>
+              {getAgreementStatusBadge(agreement.status)}
+              <span className="text-gray-400">•</span>
               <span className="text-sm text-muted-foreground">
                 Uploaded on {currentDraft ? new Date(currentDraft.createdAt).toLocaleString() : "Unknown"}
               </span>
