@@ -64,6 +64,14 @@ export default function DashboardPage() {
     startDate: "",
   });
 
+  const [isRemindModalOpen, setIsRemindModalOpen] = useState(false);
+  const [remindAgreementId, setRemindAgreementId] = useState<string | null>(null);
+  const [isReminding, setIsReminding] = useState(false);
+  const [remindData, setRemindData] = useState({
+    targetTeam: "",
+    message: "",
+  });
+
   const fetchAgreements = useCallback(async () => {
     if (!token) return;
     setLoading(true);
@@ -118,6 +126,40 @@ export default function DashboardPage() {
       toast.error(err.message);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleSendReminder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !remindAgreementId || !remindData.targetTeam) return;
+    setIsReminding(true);
+
+    try {
+      const res = await fetch("http://localhost:5000/api/reminders", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          agreementId: remindAgreementId,
+          targetTeam: remindData.targetTeam,
+          message: remindData.message,
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to send reminder");
+      }
+
+      setIsRemindModalOpen(false);
+      setRemindData({ targetTeam: "", message: "" });
+      toast.success("Reminder sent successfully");
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setIsReminding(false);
     }
   };
 
@@ -241,6 +283,7 @@ export default function DashboardPage() {
                 <TableHead>Finance</TableHead>
                 <TableHead>Business</TableHead>
                 <TableHead>Compliance</TableHead>
+                {user?.role === "LEGAL" && <TableHead>Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -259,12 +302,71 @@ export default function DashboardPage() {
                   <TableCell>{getTeamStatus(agreement.drafts?.[0]?.reviewStatuses || [], "FINANCE")}</TableCell>
                   <TableCell>{getTeamStatus(agreement.drafts?.[0]?.reviewStatuses || [], "BUSINESS")}</TableCell>
                   <TableCell>{getTeamStatus(agreement.drafts?.[0]?.reviewStatuses || [], "COMPLIANCE")}</TableCell>
+                  {user?.role === "LEGAL" && (
+                    <TableCell>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setRemindAgreementId(agreement.id);
+                          setIsRemindModalOpen(true);
+                        }}
+                      >
+                        Remind
+                      </Button>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </div>
       )}
+
+      {/* Remind Modal */}
+      <Dialog open={isRemindModalOpen} onOpenChange={setIsRemindModalOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Send Reminder</DialogTitle>
+            <DialogDescription>
+              Nudge a team to review this agreement.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSendReminder} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="targetTeam">Target Team</Label>
+              <Select
+                value={remindData.targetTeam}
+                onValueChange={(val) => setRemindData({ ...remindData, targetTeam: val || "" })}
+                required
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select team" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="FINANCE">Finance</SelectItem>
+                  <SelectItem value="BUSINESS">Business</SelectItem>
+                  <SelectItem value="COMPLIANCE">Compliance</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="message">Message (Optional)</Label>
+              <Input
+                id="message"
+                placeholder="Add a note for the team..."
+                value={remindData.message}
+                onChange={(e) => setRemindData({ ...remindData, message: e.target.value })}
+                disabled={isReminding}
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={isReminding}>
+              {isReminding ? "Sending..." : "Send Reminder"}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
