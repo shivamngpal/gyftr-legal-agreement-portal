@@ -10,13 +10,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeftIcon } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 interface Spoc {
   id: string;
@@ -69,14 +62,6 @@ interface HistoryLog {
   };
 }
 
-interface Clause {
-  id: string;
-  identifier: string;
-  text: string;
-  outcome: string;
-  comments: string | null;
-}
-
 interface AgreementDetails {
   id: string;
   clientName: string;
@@ -107,6 +92,125 @@ const agreementStatusLabels: Record<string, string> = {
   CANCELLED: 'Cancelled'
 };
 
+interface RemarksSectionProps {
+  remarks: Remark[];
+  onAddRemark: (message: string) => Promise<void>;
+}
+
+const RemarksSection = React.memo(({ remarks, onAddRemark }: RemarksSectionProps) => {
+  const [newRemark, setNewRemark] = useState("");
+  const [isSubmittingRemark, setIsSubmittingRemark] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!newRemark.trim()) return;
+    setIsSubmittingRemark(true);
+    try {
+      await onAddRemark(newRemark);
+      setNewRemark("");
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setIsSubmittingRemark(false);
+    }
+  };
+
+  return (
+    <Card className="col-span-1 md:col-span-2 lg:col-span-3 mt-6">
+      <CardHeader>
+        <CardTitle className="text-lg">Remarks & Discussion</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-6">
+          {remarks.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No remarks yet.</p>
+          ) : (
+            remarks.map((remark) => (
+              <div key={remark.id} className="p-4 border rounded-md">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-2">
+                    <h4 className="font-semibold text-sm">{remark.author.name}</h4>
+                    <Badge variant="outline" className="text-[10px] h-5 px-1.5">{remark.author.role}</Badge>
+                    {remark.draft && (
+                      <Badge variant="secondary" className="text-[10px] h-5 px-1.5 ml-2">
+                        Draft V{remark.draft.version}
+                      </Badge>
+                    )}
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(remark.createdAt).toLocaleString()}
+                  </span>
+                </div>
+                <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                  {remark.message}
+                </p>
+              </div>
+            ))
+          )}
+        </div>
+        
+        <div className="mt-6 border-t pt-4">
+          <textarea
+            value={newRemark}
+            onChange={(e) => setNewRemark(e.target.value)}
+            placeholder="Type a global remark here..."
+            className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          />
+          <div className="flex justify-end mt-3">
+            <Button 
+              onClick={handleSubmit} 
+              disabled={isSubmittingRemark || !newRemark.trim()}
+            >
+              {isSubmittingRemark ? "Submitting..." : "Post Remark"}
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+});
+RemarksSection.displayName = "RemarksSection";
+
+interface HistorySectionProps {
+  history: HistoryLog[];
+}
+
+const HistorySection = React.memo(({ history }: HistorySectionProps) => {
+  return (
+    <Card className="col-span-1 md:col-span-2 lg:col-span-3 mt-6">
+      <CardHeader>
+        <CardTitle className="text-lg">History Timeline</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {history.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No history available yet.</p>
+        ) : (
+          <div className="relative border-l ml-3 pl-6 space-y-6">
+            {history.map((log) => (
+              <div key={log.id} className="relative">
+                <div className="absolute -left-[31px] top-1 h-4 w-4 rounded-full border-2 border-primary bg-background" />
+                <div className="flex flex-col space-y-1">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm font-semibold">{log.actor.name}</span>
+                    <Badge variant="outline" className="text-[10px] h-4 px-1">{log.actor.role}</Badge>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(log.timestamp).toLocaleString()}
+                    </span>
+                  </div>
+                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{log.action.replace(/_/g, ' ')}</p>
+                  {log.details && (
+                    <p className="text-sm text-gray-600 dark:text-gray-400">{log.details}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+});
+HistorySection.displayName = "HistorySection";
+
 export default function AgreementDetailsPage() {
   const { id } = useParams() as { id: string };
   const { user, token } = useAuth();
@@ -121,85 +225,83 @@ export default function AgreementDetailsPage() {
 
   const [remarks, setRemarks] = useState<Remark[]>([]);
   const [history, setHistory] = useState<HistoryLog[]>([]);
-  const [newRemark, setNewRemark] = useState("");
-  const [isSubmittingRemark, setIsSubmittingRemark] = useState(false);
 
-  const fetchAgreement = useCallback(async () => {
+  const fetchAgreementData = useCallback(async () => {
+    if (!token) return;
+    const res = await fetch(`http://localhost:5000/api/agreements/${id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.status === 404) throw new Error("NOT_FOUND");
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.message || data.error || "Failed to load agreement");
+    }
+    return res.json();
+  }, [id, token]);
+
+  const fetchRemarks = useCallback(async () => {
+    if (!token) return;
+    const res = await fetch(`http://localhost:5000/api/agreements/${id}/remarks`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      setRemarks(await res.json());
+    }
+  }, [id, token]);
+
+  const fetchHistory = useCallback(async () => {
+    if (!token) return;
+    const res = await fetch(`http://localhost:5000/api/agreements/${id}/history`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      setHistory(await res.json());
+    }
+  }, [id, token]);
+
+  const fetchAllData = useCallback(async () => {
     if (!token) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`http://localhost:5000/api/agreements/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      
-      if (res.status === 404) {
-        throw new Error("NOT_FOUND");
-      }
-      
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.message || data.error || "Failed to load agreement");
-      }
-      
-      const data = await res.json();
-      setAgreement(data);
-
-      // Fetch remarks
-      const remarksRes = await fetch(`http://localhost:5000/api/agreements/${id}/remarks`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (remarksRes.ok) {
-        setRemarks(await remarksRes.json());
-      }
-
-      // Fetch history
-      const historyRes = await fetch(`http://localhost:5000/api/agreements/${id}/history`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (historyRes.ok) {
-        setHistory(await historyRes.json());
-      }
+      const [agreementData] = await Promise.all([
+        fetchAgreementData(),
+        fetchRemarks(),
+        fetchHistory()
+      ]);
+      setAgreement(agreementData);
     } catch (err: any) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, [id, token]);
+  }, [token, fetchAgreementData, fetchRemarks, fetchHistory]);
 
   useEffect(() => {
-    fetchAgreement();
-  }, [fetchAgreement]);
+    fetchAllData();
+  }, [fetchAllData]);
 
-  const handleAddRemark = async () => {
-    if (!newRemark.trim() || !token) return;
-    setIsSubmittingRemark(true);
-    try {
-      const res = await fetch(`http://localhost:5000/api/agreements/${id}/remarks`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ message: newRemark }),
-      });
+  const handleAddRemark = useCallback(async (message: string) => {
+    if (!token) return;
+    const res = await fetch(`http://localhost:5000/api/agreements/${id}/remarks`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ message }),
+    });
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.message || data.error || "Failed to add remark");
-      }
-
-      setNewRemark("");
-      fetchAgreement(); // Refetch to get new remarks and history
-      toast.success("Global remark added");
-    } catch (err: any) {
-      toast.error(err.message);
-    } finally {
-      setIsSubmittingRemark(false);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.message || data.error || "Failed to add remark");
     }
-  };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    fetchRemarks(); // Refetch to get new remarks only
+    toast.success("Global remark added");
+  }, [id, token, fetchRemarks]);
+
+  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.type !== "application/pdf") {
@@ -228,7 +330,7 @@ export default function AgreementDetailsPage() {
       }
 
       toast.success("Draft uploaded successfully");
-      fetchAgreement();
+      fetchAllData();
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -237,7 +339,7 @@ export default function AgreementDetailsPage() {
         fileInputRef.current.value = "";
       }
     }
-  };
+  }, [id, token, fetchAllData]);
 
   const getSpocDisplay = (spoc: Spoc | null) => {
     return spoc ? (
@@ -278,7 +380,7 @@ export default function AgreementDetailsPage() {
       <div className="flex flex-col items-center justify-center h-full space-y-4 pt-20 text-red-500">
         <h2 className="text-xl font-semibold">Error Loading Agreement</h2>
         <p>{error}</p>
-        <Button variant="outline" onClick={fetchAgreement}>Retry</Button>
+        <Button variant="outline" onClick={fetchAllData}>Retry</Button>
       </div>
     );
   }
@@ -437,107 +539,12 @@ export default function AgreementDetailsPage() {
         </Card>
 
         {/* Global Remarks & Discussion */}
-        <Card className="col-span-1 md:col-span-2 lg:col-span-3 mt-6">
-          <CardHeader>
-            <CardTitle className="text-lg">Remarks & Discussion</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-6">
-              {remarks.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No remarks yet.</p>
-              ) : (
-                remarks.map((remark) => (
-                  <div key={remark.id} className="p-4 border rounded-md">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center space-x-2">
-                        <h4 className="font-semibold text-sm">{remark.author.name}</h4>
-                        <Badge variant="outline" className="text-[10px] h-5 px-1.5">{remark.author.role}</Badge>
-                        {remark.draft && (
-                          <Badge variant="secondary" className="text-[10px] h-5 px-1.5 ml-2">
-                            Draft V{remark.draft.version}
-                          </Badge>
-                        )}
-                      </div>
-                      <span className="text-xs text-muted-foreground">
-                        {new Date(remark.createdAt).toLocaleString()}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-                      {remark.message}
-                    </p>
-                  </div>
-                ))
-              )}
-            </div>
-            
-            <div className="mt-6 border-t pt-4">
-              <textarea
-                value={newRemark}
-                onChange={(e) => setNewRemark(e.target.value)}
-                placeholder="Type a global remark here..."
-                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-              />
-              <div className="flex justify-end mt-3">
-                <Button 
-                  onClick={handleAddRemark} 
-                  disabled={isSubmittingRemark || !newRemark.trim()}
-                >
-                  {isSubmittingRemark ? "Submitting..." : "Post Remark"}
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <RemarksSection remarks={remarks} onAddRemark={handleAddRemark} />
 
         {/* History Timeline */}
-        <Card className="col-span-1 md:col-span-2 lg:col-span-3 mt-6">
-          <CardHeader>
-            <CardTitle className="text-lg">History Timeline</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {history.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No history available yet.</p>
-            ) : (
-              <div className="relative border-l ml-3 pl-6 space-y-6">
-                {history.map((log) => (
-                  <div key={log.id} className="relative">
-                    <div className="absolute -left-[31px] top-1 h-4 w-4 rounded-full border-2 border-primary bg-background" />
-                    <div className="flex flex-col space-y-1">
-                      <div className="flex items-center space-x-2">
-                        <span className="text-sm font-semibold">{log.actor.name}</span>
-                        <Badge variant="outline" className="text-[10px] h-4 px-1">{log.actor.role}</Badge>
-                        <span className="text-xs text-muted-foreground">
-                          {new Date(log.timestamp).toLocaleString()}
-                        </span>
-                      </div>
-                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{log.action.replace(/_/g, ' ')}</p>
-                      {log.details && (
-                        <p className="text-sm text-gray-600 dark:text-gray-400">{log.details}</p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <HistorySection history={history} />
 
       </div>
     </div>
-  );
-}
-
-function PlaceholderCard({ title }: { title: string }) {
-  return (
-    <Card className="bg-gray-50 border-dashed">
-      <CardHeader>
-        <CardTitle className="text-md text-gray-700">{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p className="text-sm text-muted-foreground">
-          This feature will be implemented in a later task.
-        </p>
-      </CardContent>
-    </Card>
   );
 }

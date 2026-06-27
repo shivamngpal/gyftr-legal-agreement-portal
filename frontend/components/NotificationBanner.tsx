@@ -1,8 +1,7 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth";
-import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
 interface Reminder {
@@ -16,7 +15,6 @@ interface Reminder {
 
 export function NotificationBanner() {
   const { user, token } = useAuth();
-  const pathname = usePathname();
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -44,22 +42,40 @@ export function NotificationBanner() {
   }, [token, user]);
 
   useEffect(() => {
+    if (!token || !user) return;
+    if (user.role === "LEGAL") return;
+    
     fetchReminders();
-  }, [fetchReminders, pathname]);
+  }, [token, user, fetchReminders]);
+
+  useEffect(() => {
+    if (!token || !user) return;
+    if (user.role === "LEGAL") return;
+
+    const interval = setInterval(() => {
+      fetchReminders();
+    }, 60000);
+
+    return () => clearInterval(interval);
+  }, [token, user, fetchReminders]);
 
   const handleDismissAll = async () => {
     if (!token) return;
+    
+    const previousReminders = reminders;
+    setReminders([]);
+
     try {
       await Promise.all(
-        reminders.map((reminder) =>
+        previousReminders.map((reminder) =>
           fetch(`http://localhost:5000/api/reminders/${reminder.id}/read`, {
             method: "PATCH",
             headers: { Authorization: `Bearer ${token}` },
           })
         )
       );
-      setReminders([]);
     } catch (err) {
+      setReminders(previousReminders);
       console.error("Failed to dismiss reminders:", err);
     }
   };

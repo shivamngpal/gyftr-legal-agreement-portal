@@ -64,6 +64,98 @@ const agreementStatusLabels: Record<string, string> = {
   CANCELLED: 'Cancelled'
 };
 
+interface RemindModalProps {
+  isOpen: boolean;
+  onClose: (isOpen: boolean) => void;
+  agreementId: string | null;
+  token: string | null;
+}
+
+const RemindModal = React.memo(({ isOpen, onClose, agreementId, token }: RemindModalProps) => {
+  const [remindData, setRemindData] = useState({ targetTeam: "", message: "" });
+  const [isReminding, setIsReminding] = useState(false);
+
+  const handleSendReminder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !agreementId || !remindData.targetTeam) return;
+    setIsReminding(true);
+
+    try {
+      const res = await fetch("http://localhost:5000/api/reminders", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          agreementId,
+          targetTeam: remindData.targetTeam,
+          message: remindData.message,
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to send reminder");
+      }
+
+      onClose(false);
+      setRemindData({ targetTeam: "", message: "" });
+      toast.success("Reminder sent successfully");
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setIsReminding(false);
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Send Reminder</DialogTitle>
+          <DialogDescription>
+            Nudge a team to review this agreement.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSendReminder} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="targetTeam">Target Team</Label>
+            <Select
+              value={remindData.targetTeam}
+              onValueChange={(val) => setRemindData({ ...remindData, targetTeam: val || "" })}
+              required
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select team" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="FINANCE">Finance</SelectItem>
+                <SelectItem value="BUSINESS">Business</SelectItem>
+                <SelectItem value="COMPLIANCE">Compliance</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="message">Message (Optional)</Label>
+            <Input
+              id="message"
+              placeholder="Add a note for the team..."
+              value={remindData.message}
+              onChange={(e) => setRemindData({ ...remindData, message: e.target.value })}
+              disabled={isReminding}
+            />
+          </div>
+          <Button type="submit" className="w-full" disabled={isReminding}>
+            {isReminding ? "Sending..." : "Send Reminder"}
+          </Button>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+});
+RemindModal.displayName = "RemindModal";
+
 export default function DashboardPage() {
   const { user, token } = useAuth();
   const router = useRouter();
@@ -95,11 +187,20 @@ export default function DashboardPage() {
 
   const [isRemindModalOpen, setIsRemindModalOpen] = useState(false);
   const [remindAgreementId, setRemindAgreementId] = useState<string | null>(null);
-  const [isReminding, setIsReminding] = useState(false);
-  const [remindData, setRemindData] = useState({
-    targetTeam: "",
-    message: "",
-  });
+
+  const fetchUsers = useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await fetch("http://localhost:5000/api/users", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        setUsers(await res.json());
+      }
+    } catch (err) {
+      console.error("Failed to fetch users", err);
+    }
+  }, [token]);
 
   const fetchAgreements = useCallback(async () => {
     if (!token) return;
@@ -112,23 +213,13 @@ export default function DashboardPage() {
       if (typeFilter) params.append("type", typeFilter);
       if (myStatusFilter) params.append("myStatus", myStatusFilter);
 
-      const [agreementsRes, usersRes] = await Promise.all([
-        fetch(`http://localhost:5000/api/agreements?${params.toString()}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch("http://localhost:5000/api/users", {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-      ]);
+      const agreementsRes = await fetch(`http://localhost:5000/api/agreements?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       
       if (!agreementsRes.ok) throw new Error("Failed to fetch agreements");
       const data = await agreementsRes.json();
       setAgreements(data);
-
-      if (usersRes.ok) {
-        const usersData = await usersRes.json();
-        setUsers(usersData);
-      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -137,10 +228,14 @@ export default function DashboardPage() {
   }, [token, debouncedSearch, statusFilter, typeFilter, myStatusFilter]);
 
   useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
+
+  useEffect(() => {
     fetchAgreements();
   }, [fetchAgreements]);
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const handleCreate = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token) return;
     setIsSubmitting(true);
@@ -177,41 +272,7 @@ export default function DashboardPage() {
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const handleSendReminder = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!token || !remindAgreementId || !remindData.targetTeam) return;
-    setIsReminding(true);
-
-    try {
-      const res = await fetch("http://localhost:5000/api/reminders", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          agreementId: remindAgreementId,
-          targetTeam: remindData.targetTeam,
-          message: remindData.message,
-        }),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Failed to send reminder");
-      }
-
-      setIsRemindModalOpen(false);
-      setRemindData({ targetTeam: "", message: "" });
-      toast.success("Reminder sent successfully");
-    } catch (err: any) {
-      toast.error(err.message);
-    } finally {
-      setIsReminding(false);
-    }
-  };
+  }, [token, formData, fetchAgreements]);
 
   const getTeamStatus = (statuses: ReviewStatus[], team: string) => {
     const status = statuses.find((s) => s.team === team)?.status || "N/A";
@@ -551,49 +612,12 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Remind Modal */}
-      <Dialog open={isRemindModalOpen} onOpenChange={setIsRemindModalOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Send Reminder</DialogTitle>
-            <DialogDescription>
-              Nudge a team to review this agreement.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleSendReminder} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="targetTeam">Target Team</Label>
-              <Select
-                value={remindData.targetTeam}
-                onValueChange={(val) => setRemindData({ ...remindData, targetTeam: val || "" })}
-                required
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select team" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="FINANCE">Finance</SelectItem>
-                  <SelectItem value="BUSINESS">Business</SelectItem>
-                  <SelectItem value="COMPLIANCE">Compliance</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="message">Message (Optional)</Label>
-              <Input
-                id="message"
-                placeholder="Add a note for the team..."
-                value={remindData.message}
-                onChange={(e) => setRemindData({ ...remindData, message: e.target.value })}
-                disabled={isReminding}
-              />
-            </div>
-            <Button type="submit" className="w-full" disabled={isReminding}>
-              {isReminding ? "Sending..." : "Send Reminder"}
-            </Button>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <RemindModal
+        isOpen={isRemindModalOpen}
+        onClose={setIsRemindModalOpen}
+        agreementId={remindAgreementId}
+        token={token}
+      />
     </div>
   );
 }

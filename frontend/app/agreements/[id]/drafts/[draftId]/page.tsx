@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -148,6 +148,56 @@ const agreementStatusLabels: Record<string, string> = {
   CANCELLED: 'Cancelled'
 };
 
+interface WorkspacePdfLayoutProps {
+  fileUrl?: string;
+  headerContent?: React.ReactNode;
+  children: React.ReactNode;
+}
+
+const WorkspacePdfLayout = React.memo(({ fileUrl, headerContent, children }: WorkspacePdfLayoutProps) => {
+  const [isDocVisible, setIsDocVisible] = useState(false);
+
+  return (
+    <div className="flex flex-col">
+      <div className="flex items-start justify-between mb-8 border-b pb-6">
+        <div className="flex-1">
+          {headerContent}
+        </div>
+        {fileUrl && (
+          <div>
+            <Button onClick={() => setIsDocVisible(!isDocVisible)}>
+              {isDocVisible ? "Hide PDF" : "View PDF"}
+            </Button>
+          </div>
+        )}
+      </div>
+
+      <div className={isDocVisible ? "h-[calc(100vh-140px)]" : ""}>
+        <PanelGroup orientation="horizontal" style={isDocVisible ? {} : { overflow: "visible" }}>
+          {/* Left Panel */}
+          <Panel defaultSize={100} minSize={30} style={isDocVisible ? {} : { overflow: "visible" }}>
+            <div className={`w-full space-y-6 pb-10 block ${isDocVisible ? "h-full overflow-y-auto pr-4" : ""}`}>
+              {children}
+            </div>
+          </Panel>
+          {/* Right Panel - PDF Viewer */}
+          {isDocVisible && fileUrl && (
+            <>
+              <PanelResizeHandle className="w-2 bg-gray-200 cursor-col-resize hover:bg-gray-300 active:bg-blue-500 transition-colors mx-4 rounded-full" />
+              <Panel defaultSize={60} minSize={30}>
+                <div className="w-full h-full border rounded-lg overflow-hidden bg-white shadow-sm flex-shrink-0">
+                  <iframe src={fileUrl} className="w-full h-full border-0" title="PDF Viewer" />
+                </div>
+              </Panel>
+            </>
+          )}
+        </PanelGroup>
+      </div>
+    </div>
+  );
+});
+WorkspacePdfLayout.displayName = "WorkspacePdfLayout";
+
 export default function DraftWorkspacePage() {
   const { id, draftId } = useParams() as { id: string; draftId: string };
   const { user, token } = useAuth();
@@ -165,66 +215,65 @@ export default function DraftWorkspacePage() {
   const [isSubmittingRemark, setIsSubmittingRemark] = useState(false);
   const [editedClauses, setEditedClauses] = useState<Record<string, { outcome: string, comments: string }>>({});
   const [isSavingClauses, setIsSavingClauses] = useState(false);
-  const [isDocVisible, setIsDocVisible] = useState(false);
   const [isSignOffModalOpen, setIsSignOffModalOpen] = useState(false);
   const [isSubmittingSignOff, setIsSubmittingSignOff] = useState(false);
   const selectedDraftId = draftId;
 
-  const fetchAgreement = useCallback(async () => {
+  const fetchAgreementData = useCallback(async () => {
+    const res = await fetch(`http://localhost:5000/api/agreements/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) throw new Error("Failed to load agreement");
+    setAgreement(await res.json());
+  }, [id, token]);
+
+  const fetchRemarks = useCallback(async () => {
+    const res = await fetch(`http://localhost:5000/api/agreements/${id}/remarks?draftId=${draftId}`, { headers: { Authorization: `Bearer ${token}` } });
+    if (res.ok) setRemarks(await res.json());
+  }, [id, draftId, token]);
+
+  const fetchHistory = useCallback(async () => {
+    const res = await fetch(`http://localhost:5000/api/agreements/${id}/history?draftId=${draftId}`, { headers: { Authorization: `Bearer ${token}` } });
+    if (res.ok) setHistory(await res.json());
+  }, [id, draftId, token]);
+
+  const fetchSignOffs = useCallback(async () => {
+    const res = await fetch(`http://localhost:5000/api/agreements/${id}/signoff`, { headers: { Authorization: `Bearer ${token}` } });
+    if (res.ok) setSignOffs(await res.json());
+  }, [id, token]);
+
+  const fetchClauses = useCallback(async () => {
+    if (!selectedDraftId) return;
+    try {
+      const res = await fetch(`http://localhost:5000/api/drafts/${selectedDraftId}/clauses`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setClauses(await res.json());
+    } catch {
+      setClauses([]);
+    }
+  }, [token, selectedDraftId]);
+
+  const fetchAllData = useCallback(async () => {
     if (!token) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`http://localhost:5000/api/agreements/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await Promise.all([
+        fetchAgreementData(),
+        fetchClauses(),
+        fetchSignOffs()
+      ]);
       
-      if (res.status === 404) {
-        throw new Error("NOT_FOUND");
-      }
-      
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.message || data.error || "Failed to load agreement");
-      }
-      
-      const data = await res.json();
-      setAgreement(data);
+      setLoading(false);
 
-      // Fetch remarks
-      const remarksRes = await fetch(`http://localhost:5000/api/agreements/${id}/remarks?draftId=${draftId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (remarksRes.ok) {
-        const remarksData = await remarksRes.json();
-        setRemarks(remarksData);
-      }
-
-      // Fetch history
-      const historyRes = await fetch(`http://localhost:5000/api/agreements/${id}/history?draftId=${draftId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (historyRes.ok) {
-        const historyData = await historyRes.json();
-        setHistory(historyData);
-      }
-
-      // Fetch sign-offs
-      const signOffsRes = await fetch(`http://localhost:5000/api/agreements/${id}/signoff`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (signOffsRes.ok) {
-        const signOffsData = await signOffsRes.json();
-        setSignOffs(signOffsData);
-      }
+      await Promise.all([
+        fetchRemarks(),
+        fetchHistory()
+      ]);
     } catch (err: any) {
       setError(err.message);
-    } finally {
       setLoading(false);
     }
-  }, [id, draftId, token]);
+  }, [token, fetchAgreementData, fetchClauses, fetchSignOffs, fetchRemarks, fetchHistory]);
 
-  const handleRecordSignOff = async () => {
+  const handleRecordSignOff = useCallback(async () => {
     if (!token) return;
     setIsSubmittingSignOff(true);
     try {
@@ -240,60 +289,52 @@ export default function DraftWorkspacePage() {
       
       toast.success("Sign-off recorded successfully");
       setIsSignOffModalOpen(false);
-      fetchAgreement(); // Refresh both signoffs and team review statuses
+      fetchSignOffs();
+      fetchAgreementData();
     } catch (err: any) {
       toast.error(err.message);
     } finally {
       setIsSubmittingSignOff(false);
     }
-  };
+  }, [id, token, fetchSignOffs, fetchAgreementData]);
 
   useEffect(() => {
-    fetchAgreement();
-  }, [fetchAgreement]);
-
-  const fetchClauses = useCallback(async () => {
-    if (!token || !selectedDraftId) {
-      setClauses([]);
-      return;
-    }
-    try {
-      const res = await fetch(`http://localhost:5000/api/drafts/${selectedDraftId}/clauses`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setClauses(data);
-      } else {
-        setClauses([]);
-      }
-    } catch {
-      setClauses([]);
-    }
-  }, [token, selectedDraftId]);
-
-  useEffect(() => {
-    fetchClauses();
-  }, [fetchClauses]);
+    fetchAllData();
+  }, [fetchAllData]);
 
   const [comparisonData, setComparisonData] = useState<ComparisonData | null>(null);
   const [loadingComparison, setLoadingComparison] = useState(false);
   const [selectedBaseDraftId, setSelectedBaseDraftId] = useState<string | null>(null);
 
+  const diffResults = useMemo(() => {
+    if (!comparisonData?.comparisons) return [];
+    
+    return comparisonData.comparisons.map(pair => ({
+      identifier: pair.currentClause.identifier,
+      leftDiff: pair.baseClause 
+        ? renderLeftDiff(pair.baseClause.text, pair.currentClause.text)
+        : null,
+      rightDiff: pair.baseClause
+        ? renderRightDiff(pair.baseClause.text, pair.currentClause.text)
+        : null,
+      currentClause: pair.currentClause,
+      baseClause: pair.baseClause
+    }));
+  }, [comparisonData]);
+
   useEffect(() => {
-    // Reset base draft selection when the main draft changes
     setSelectedBaseDraftId(null);
   }, [selectedDraftId]);
 
-  const fetchComparison = useCallback(async () => {
+  const fetchComparison = useCallback(async (baseDraftIdToFetch?: string) => {
     if (!token || !selectedDraftId || user?.role !== "LEGAL") {
       setComparisonData(null);
       return;
     }
     setLoadingComparison(true);
     try {
-      const url = selectedBaseDraftId 
-        ? `http://localhost:5000/api/drafts/${selectedDraftId}/compare?baseDraftId=${selectedBaseDraftId}`
+      const url = baseDraftIdToFetch 
+        ? `http://localhost:5000/api/drafts/${selectedDraftId}/compare?baseDraftId=${baseDraftIdToFetch}`
         : `http://localhost:5000/api/drafts/${selectedDraftId}/compare`;
       
       const res = await fetch(url, {
@@ -310,13 +351,19 @@ export default function DraftWorkspacePage() {
     } finally {
       setLoadingComparison(false);
     }
-  }, [token, selectedDraftId, user?.role, selectedBaseDraftId]);
+  }, [token, selectedDraftId, user?.role]);
 
   useEffect(() => {
     fetchComparison();
   }, [fetchComparison]);
 
-  const handleStatusUpdate = async (team: string, newStatus: string) => {
+  useEffect(() => {
+    if (selectedBaseDraftId) {
+      fetchComparison(selectedBaseDraftId);
+    }
+  }, [selectedBaseDraftId, selectedDraftId, fetchComparison]);
+
+  const handleStatusUpdate = useCallback(async (team: string, newStatus: string) => {
     if (!token) return;
     setIsUpdating(team);
     try {
@@ -335,15 +382,16 @@ export default function DraftWorkspacePage() {
       }
       
       toast.success(`${team} status updated to ${newStatus}`);
-      fetchAgreement();
+      fetchAgreementData();
+      fetchHistory();
     } catch (err: any) {
       toast.error(err.message);
     } finally {
       setIsUpdating(null);
     }
-  };
+  }, [id, draftId, token, fetchAgreementData, fetchHistory]);
 
-  const handleAddRemark = async () => {
+  const handleAddRemark = useCallback(async () => {
     if (!newRemark.trim() || !token) return;
     setIsSubmittingRemark(true);
     try {
@@ -363,15 +411,15 @@ export default function DraftWorkspacePage() {
 
       toast.success("Remark added successfully");
       setNewRemark("");
-      fetchAgreement();
+      fetchRemarks();
     } catch (err: any) {
       toast.error(err.message);
     } finally {
       setIsSubmittingRemark(false);
     }
-  };
+  }, [id, draftId, token, newRemark, fetchRemarks]);
 
-  const handleClauseChange = (clauseId: string, field: "outcome" | "comments", value: string) => {
+  const handleClauseChange = useCallback((clauseId: string, field: "outcome" | "comments", value: string) => {
     setEditedClauses((prev) => {
       const existing = prev[clauseId] || { 
         outcome: clauses.find(c => c.id === clauseId)?.outcome || "PENDING", 
@@ -385,9 +433,9 @@ export default function DraftWorkspacePage() {
         }
       };
     });
-  };
+  }, [clauses]);
 
-  const handleSaveClauseReview = async () => {
+  const handleSaveClauseReview = useCallback(async () => {
     if (!token || Object.keys(editedClauses).length === 0) return;
     setIsSavingClauses(true);
     
@@ -414,15 +462,13 @@ export default function DraftWorkspacePage() {
 
       toast.success("Clause review saved successfully");
       setEditedClauses({});
-      fetchAgreement(); // Refreshes history and remarks
-      fetchClauses(); // Refreshes clauses
-      fetchComparison(); // Refreshes comparison view
+      fetchClauses();
     } catch (err: any) {
       toast.error(err.message);
     } finally {
       setIsSavingClauses(false);
     }
-  };
+  }, [draftId, token, editedClauses, fetchClauses]);
 
   const getTeamStatusBadge = (statuses: ReviewStatus[], team: string) => {
     const status = statuses.find((s) => s.team === team)?.status || "N/A";
@@ -465,7 +511,7 @@ export default function DraftWorkspacePage() {
       <div className="flex flex-col items-center justify-center h-full space-y-4 pt-20 text-red-500">
         <h2 className="text-xl font-semibold">Error Loading Agreement</h2>
         <p>{error}</p>
-        <Button variant="outline" onClick={fetchAgreement}>Retry</Button>
+        <Button variant="outline" onClick={fetchAllData}>Retry</Button>
       </div>
     );
   }
@@ -494,46 +540,36 @@ export default function DraftWorkspacePage() {
 
   return (
     <div className="space-y-8 pb-10">
-      {/* Header Area */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
-        <div className="flex items-center space-x-4">
-          <Link href={`/agreements/${id}`}>
-            <Button variant="outline" size="icon">
-              <ArrowLeftIcon className="h-4 w-4" />
-            </Button>
-          </Link>
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight">
-              {agreement.clientName} - Draft Version {currentDraft?.version || "Unknown"}
-            </h2>
-            <div className="flex items-center space-x-2 mt-1">
-              <Badge variant="outline">{agreementTypeLabels[agreement.type] || agreement.type}</Badge>
-              <span className="text-gray-400">•</span>
-              {getAgreementStatusBadge(agreement.status)}
-              <span className="text-gray-400">•</span>
-              <span className="text-sm text-muted-foreground">
-                Uploaded on {currentDraft ? new Date(currentDraft.createdAt).toLocaleString() : "Unknown"}
-              </span>
+      
+      <WorkspacePdfLayout
+        fileUrl={currentDraft?.fileUrl}
+        headerContent={
+          <div className="flex flex-col sm:flex-row sm:items-center space-y-4 sm:space-y-0">
+            <div className="flex items-center space-x-4">
+              <Link href={`/agreements/${id}`}>
+                <Button variant="outline" size="icon">
+                  <ArrowLeftIcon className="h-4 w-4" />
+                </Button>
+              </Link>
+              <div>
+                <h2 className="text-2xl font-bold tracking-tight">
+                  {agreement.clientName} - Draft Version {currentDraft?.version || "Unknown"}
+                </h2>
+                <div className="flex items-center space-x-2 mt-1">
+                  <Badge variant="outline">{agreement?.type ? agreementTypeLabels[agreement.type] || agreement.type : agreement.type}</Badge>
+                  <span className="text-gray-400">•</span>
+                  {getAgreementStatusBadge(agreement.status)}
+                  <span className="text-gray-400">•</span>
+                  <span className="text-sm text-muted-foreground">
+                    Uploaded on {currentDraft ? new Date(currentDraft.createdAt).toLocaleString() : "Unknown"}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-        {currentDraft && (
-          <div>
-            <Button onClick={() => setIsDocVisible(!isDocVisible)}>
-              {isDocVisible ? "Hide PDF" : "View PDF"}
-            </Button>
-          </div>
-        )}
-      </div>
-
-      <div className={isDocVisible ? "h-[calc(100vh-140px)]" : ""}>
-        <PanelGroup orientation="horizontal" style={isDocVisible ? {} : { overflow: "visible" }}>
-          {/* Left Panel */}
-          <Panel defaultSize={100} minSize={30} style={isDocVisible ? {} : { overflow: "visible" }}>
-            <div className={`w-full space-y-6 pb-10 block ${isDocVisible ? "h-full overflow-y-auto pr-4" : ""}`}>
-
-              {/* Review Statuses */}
-              <Card>
+        }
+      >
+        <Card>
           <CardHeader>
             <CardTitle className="text-lg">Team Review Status</CardTitle>
           </CardHeader>
@@ -783,14 +819,14 @@ export default function DraftWorkspacePage() {
                   <p className="text-sm text-muted-foreground">No clauses are available for this draft.</p>
                 ) : (
                   <div className="space-y-6">
-                    {comparisonData.comparisons.map((comp, idx) => {
+                    {diffResults.map((comp, idx) => {
                       const currentOutcome = editedClauses[comp.currentClause.id]?.outcome || comp.currentClause.outcome;
                       const currentComments = editedClauses[comp.currentClause.id]?.comments ?? (comp.currentClause.comments || "");
                       
                       return (
                         <div key={idx} className="border rounded-md overflow-hidden">
                           <div className="bg-gray-50 dark:bg-gray-900 border-b px-4 py-2">
-                            <h4 className="font-semibold text-sm">{comp.currentClause.identifier}</h4>
+                            <h4 className="font-semibold text-sm">{comp.identifier}</h4>
                           </div>
                           <div className="grid grid-cols-2 divide-x">
                             <div className="p-4">
@@ -799,7 +835,7 @@ export default function DraftWorkspacePage() {
                               </p>
                               {comp.baseClause ? (
                                 <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
-                                  {renderLeftDiff(comp.baseClause.text, comp.currentClause.text)}
+                                  {comp.leftDiff}
                                 </p>
                               ) : (
                                 <p className="text-sm text-muted-foreground italic">Clause not present in selected draft.</p>
@@ -827,7 +863,7 @@ export default function DraftWorkspacePage() {
                               </div>
                               <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed mb-4 flex-grow">
                                 {comp.baseClause 
-                                  ? renderRightDiff(comp.baseClause.text, comp.currentClause.text)
+                                  ? comp.rightDiff
                                   : comp.currentClause.text}
                               </p>
                               <div className="mt-auto">
@@ -960,9 +996,6 @@ export default function DraftWorkspacePage() {
               </div>
             </CardContent>
           </Card>
-            </div>
-          </Panel>
-
           {/* Sign-Off Confirmation Modal */}
           <Dialog open={isSignOffModalOpen} onOpenChange={setIsSignOffModalOpen}>
             <DialogContent className="sm:max-w-[425px]">
@@ -983,29 +1016,7 @@ export default function DraftWorkspacePage() {
             </DialogContent>
           </Dialog>
 
-          {/* Right Panel - PDF Viewer */}
-          {isDocVisible && (
-            <>
-              <PanelResizeHandle className="w-2 bg-gray-200 cursor-col-resize hover:bg-gray-300 active:bg-blue-500 transition-colors mx-4 rounded-full" />
-              <Panel defaultSize={60} minSize={30}>
-                <div className="w-full h-full border rounded-lg overflow-hidden bg-white shadow-sm flex-shrink-0">
-                  {currentDraft ? (
-                    <iframe
-                      src={currentDraft.fileUrl}
-                      className="w-full h-full border-0"
-                      title={`Draft V${currentDraft.version}`}
-                    />
-                  ) : (
-                    <div className="flex items-center justify-center h-full text-muted-foreground">
-                      No PDF available
-                    </div>
-                  )}
-                </div>
-              </Panel>
-            </>
-          )}
-        </PanelGroup>
-      </div>
+      </WorkspacePdfLayout>
     </div>
   );
 }

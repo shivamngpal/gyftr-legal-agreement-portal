@@ -91,6 +91,10 @@ model Agreement {
   drafts         Draft[]
   reminders      Reminder[]
   signOffs       SignOff[]
+
+  @@index([status])
+  @@index([type])
+  @@index([clientName])
 }
 
 model ReviewStatus {
@@ -102,6 +106,7 @@ model ReviewStatus {
   updatedAt   DateTime         @updatedAt
 
   @@unique([draftId, team])
+  @@index([draftId, team])
 }
 
 model Remark {
@@ -114,6 +119,9 @@ model Remark {
   author      User      @relation(fields: [authorId], references: [id])
   message     String
   createdAt   DateTime  @default(now())
+
+  @@index([agreementId])
+  @@index([draftId])
 }
 
 model HistoryLog {
@@ -127,6 +135,9 @@ model HistoryLog {
   action      String // e.g., "STATUS_CHANGE", "REMINDER_SENT", "SIGNED_OFF"
   details     String // Description of the change
   timestamp   DateTime  @default(now())
+
+  @@index([agreementId])
+  @@index([draftId])
 }
 
 model Draft {
@@ -141,6 +152,8 @@ model Draft {
   reviewStatuses ReviewStatus[]
   remarks        Remark[]
   historyLogs    HistoryLog[]
+
+  @@index([agreementId])
 }
 
 model Clause {
@@ -151,6 +164,9 @@ model Clause {
   text       String
   outcome    ClauseOutcome @default(PENDING)
   comments   String?
+
+  @@index([draftId])
+  @@index([identifier])
 }
 
 model Reminder {
@@ -163,6 +179,8 @@ model Reminder {
   message     String?
   timestamp   DateTime  @default(now())
   read        Boolean   @default(false)
+
+  @@index([targetTeam, read])
 }
 
 model SignOff {

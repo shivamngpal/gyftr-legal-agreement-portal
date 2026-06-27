@@ -51,7 +51,6 @@ export const createAgreement = async (req: Request, res: Response): Promise<void
     res.status(201).json(result);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const zodError = error as z.ZodError<any>;
       res.status(400).json({ error: "Validation error", details: (error as any).errors });
       return;
     }
@@ -90,7 +89,6 @@ export const getAgreementById = async (req: Request, res: Response): Promise<voi
     res.json(agreement);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const zodError = error as z.ZodError<any>;
       res.status(400).json({ error: "Validation error", details: (error as any).errors });
       return;
     }
