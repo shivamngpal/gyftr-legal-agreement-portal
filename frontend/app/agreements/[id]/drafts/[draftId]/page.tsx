@@ -683,7 +683,62 @@ export default function DraftWorkspacePage() {
                 ) : !comparisonData ? (
                   <p className="text-sm text-muted-foreground">Unable to load comparison data.</p>
                 ) : !comparisonData.baseDraft ? (
-                  <p className="text-sm text-muted-foreground">No comparison draft available.</p>
+                  <div className="space-y-6">
+                    <div className="text-sm text-blue-700 bg-blue-50 p-3 rounded-md border border-blue-200 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                      This is the first draft. No previous version available for comparison.
+                    </div>
+                    {clauses.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No clauses are available for this draft.</p>
+                    ) : (
+                      clauses.map((clause, idx) => {
+                        const currentOutcome = editedClauses[clause.id]?.outcome || clause.outcome;
+                        const currentComments = editedClauses[clause.id]?.comments ?? (clause.comments || "");
+                        
+                        return (
+                          <div key={idx} className="border rounded-md overflow-hidden">
+                            <div className="bg-gray-50 dark:bg-gray-900 border-b px-4 py-2 flex items-center justify-between">
+                              <h4 className="font-semibold text-sm">{clause.identifier}</h4>
+                              <Select
+                                value={currentOutcome}
+                                onValueChange={(val) => handleClauseChange(clause.id, "outcome", val as string)}
+                              >
+                                <SelectTrigger className="w-[120px] h-8 text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="PENDING">Pending</SelectItem>
+                                  <SelectItem value="ACCEPTED">Accepted</SelectItem>
+                                  <SelectItem value="PARTIAL">Partial</SelectItem>
+                                  <SelectItem value="HELD">Held</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="p-4 flex flex-col h-full">
+                              <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed mb-4">
+                                {clause.text}
+                              </p>
+                              <div className="mt-auto">
+                                <textarea
+                                  className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                  placeholder="Add comments for this clause..."
+                                  value={currentComments}
+                                  onChange={(e) => handleClauseChange(clause.id, "comments", e.target.value)}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                    <div className="flex justify-end pt-4 border-t mt-4">
+                      <Button 
+                        onClick={handleSaveClauseReview}
+                        disabled={Object.keys(editedClauses).length === 0 || isSavingClauses}
+                      >
+                        {isSavingClauses ? "Saving..." : "Save Clause Review"}
+                      </Button>
+                    </div>
+                  </div>
                 ) : comparisonData.comparisons.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No clauses are available for this draft.</p>
                 ) : (
