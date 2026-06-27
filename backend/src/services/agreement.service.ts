@@ -264,7 +264,7 @@ export class AgreementService {
   }
 
   static async updateAgreement(id: string, data: UpdateAgreementRequest) {
-    const updateData: any = { ...data };
+    const updateData: Record<string, unknown> = { ...data };
     if (data.startDate) {
       updateData.startDate = new Date(data.startDate);
     }

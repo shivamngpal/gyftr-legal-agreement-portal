@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import * as diff from "diff";
+import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from "react-resizable-panels";
 
 interface Spoc {
   id: string;
@@ -131,6 +132,7 @@ export default function DraftWorkspacePage() {
   const [isSubmittingRemark, setIsSubmittingRemark] = useState(false);
   const [editedClauses, setEditedClauses] = useState<Record<string, { outcome: string, comments: string }>>({});
   const [isSavingClauses, setIsSavingClauses] = useState(false);
+  const [isDocVisible, setIsDocVisible] = useState(false);
   const selectedDraftId = draftId;
 
   const fetchAgreement = useCallback(async () => {
@@ -425,17 +427,21 @@ export default function DraftWorkspacePage() {
         </div>
         {currentDraft && (
           <div>
-            <a href={currentDraft.fileUrl} target="_blank" rel="noopener noreferrer">
-              <Button>View PDF</Button>
-            </a>
+            <Button onClick={() => setIsDocVisible(!isDocVisible)}>
+              {isDocVisible ? "Hide PDF" : "View PDF"}
+            </Button>
           </div>
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className={isDocVisible ? "h-[calc(100vh-140px)]" : ""}>
+        <PanelGroup orientation="horizontal" style={isDocVisible ? {} : { overflow: "visible" }}>
+          {/* Left Panel */}
+          <Panel defaultSize={100} minSize={30} style={isDocVisible ? {} : { overflow: "visible" }}>
+            <div className={`w-full space-y-6 pb-10 block ${isDocVisible ? "h-full overflow-y-auto pr-4" : ""}`}>
 
-        {/* Review Statuses */}
-        <Card>
+              {/* Review Statuses */}
+              <Card>
           <CardHeader>
             <CardTitle className="text-lg">Team Review Status</CardTitle>
           </CardHeader>
@@ -480,13 +486,11 @@ export default function DraftWorkspacePage() {
             })}
           </CardContent>
         </Card>
-      </div>
 
-      <div className="mt-8">
-        <h3 className="text-xl font-bold tracking-tight mb-4">Workspace Modules</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* Remarks Section */}
-          <Card className="col-span-1 md:col-span-2 lg:col-span-3">
+              <h3 className="text-xl font-bold tracking-tight mt-2">Workspace Modules</h3>
+              
+              {/* Remarks Section */}
+              <Card>
             <CardHeader>
               <CardTitle className="text-lg">Remarks & Discussion</CardTitle>
             </CardHeader>
@@ -532,7 +536,7 @@ export default function DraftWorkspacePage() {
             </CardContent>
           </Card>
           {/* History Section */}
-          <Card className="col-span-1 md:col-span-2 lg:col-span-3">
+          <Card>
             <CardHeader>
               <CardTitle className="text-lg">History Timeline</CardTitle>
             </CardHeader>
@@ -584,7 +588,7 @@ export default function DraftWorkspacePage() {
             </CardContent>
           </Card>
           {user?.role === "LEGAL" ? (
-            <Card className="col-span-1 md:col-span-2 lg:col-span-3">
+            <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-lg">Clause Comparison</CardTitle>
                 {agreement.drafts && agreement.drafts.length > 1 && (
@@ -705,7 +709,7 @@ export default function DraftWorkspacePage() {
               </CardContent>
             </Card>
           ) : (
-            <Card className="col-span-1 md:col-span-2 lg:col-span-3">
+            <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Clause Analysis</CardTitle>
               </CardHeader>
@@ -745,8 +749,32 @@ export default function DraftWorkspacePage() {
             </Card>
           )}
           <PlaceholderCard title="Reminders" />
-          <PlaceholderCard title="Sign-off" />
-        </div>
+              <PlaceholderCard title="Sign-off" />
+            </div>
+          </Panel>
+
+          {/* Right Panel - PDF Viewer */}
+          {isDocVisible && (
+            <>
+              <PanelResizeHandle className="w-2 bg-gray-200 cursor-col-resize hover:bg-gray-300 active:bg-blue-500 transition-colors mx-4 rounded-full" />
+              <Panel defaultSize={60} minSize={30}>
+                <div className="w-full h-full border rounded-lg overflow-hidden bg-white shadow-sm flex-shrink-0">
+                  {currentDraft ? (
+                    <iframe
+                      src={currentDraft.fileUrl}
+                      className="w-full h-full border-0"
+                      title={`Draft V${currentDraft.version}`}
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-muted-foreground">
+                      No PDF available
+                    </div>
+                  )}
+                </div>
+              </Panel>
+            </>
+          )}
+        </PanelGroup>
       </div>
     </div>
   );
