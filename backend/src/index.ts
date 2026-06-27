@@ -9,6 +9,7 @@ import agreementRoutes from "./routes/agreement.routes";
 import draftRoutes from "./routes/draft.routes";
 import reminderRoutes from "./routes/reminder.routes";
 import userRoutes from "./routes/user.routes";
+import dashboardRoutes from "./routes/dashboard.routes";
 
 // Middleware
 app.use(cors({ origin: env.frontendUrl }));
@@ -20,6 +21,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/agreements", agreementRoutes);
 app.use("/api/drafts", draftRoutes);
 app.use("/api/reminders", reminderRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 
 // Health check
 app.get("/health", (_req, res) => {
