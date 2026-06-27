@@ -1,9 +1,17 @@
 import { prisma } from "../config/db";
 import { CreateAgreementRequest, UpdateAgreementRequest } from "../utils/validation";
-import { Role } from "../generated/prisma/enums";
+import { Role, AgreementType, AgreementStatus, ReviewStatusEnum } from "../generated/prisma/enums";
 import { S3Service } from "./s3.service";
 import { AIService } from "./ai.service";
 import pdf from "pdf-parse";
+
+export interface AgreementFilters {
+  search?: string;
+  status?: string;
+  type?: string;
+  myStatus?: string;
+  userRole?: string;
+}
 
 export class AgreementService {
   static async uploadDraft(agreementId: string, fileBuffer: Buffer, fileName: string, actorId: string) {
@@ -126,8 +134,38 @@ export class AgreementService {
     });
   }
 
-  static async getAllAgreements() {
+  static async getAllAgreements(filters?: AgreementFilters) {
+    const where: any = {};
+
+    if (filters) {
+      if (filters.search) {
+        where.clientName = {
+          contains: filters.search,
+          mode: 'insensitive',
+        };
+      }
+      if (filters.status) {
+        where.status = filters.status as AgreementStatus;
+      }
+      if (filters.type) {
+        where.type = filters.type as AgreementType;
+      }
+      if (filters.myStatus && filters.userRole) {
+        where.drafts = {
+          some: {
+            reviewStatuses: {
+              some: {
+                team: filters.userRole as Role,
+                status: filters.myStatus as ReviewStatusEnum,
+              },
+            },
+          },
+        };
+      }
+    }
+
     return await prisma.agreement.findMany({
+      where,
       include: {
         legalSpoc: { select: { id: true, name: true, email: true } },
         financeSpoc: { select: { id: true, name: true, email: true } },

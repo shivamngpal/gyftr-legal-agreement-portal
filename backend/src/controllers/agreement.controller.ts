@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { ExportService } from "../services/export.service";
 import { createAgreementSchema, agreementIdSchema, updateAgreementSchema, updateReviewStatusSchema, createRemarkSchema } from "../utils/validation";
 import { AgreementService } from "../services/agreement.service";
 import { z } from "zod";
@@ -59,9 +60,16 @@ export const createAgreement = async (req: Request, res: Response): Promise<void
   }
 };
 
-export const getAllAgreements = async (_req: Request, res: Response): Promise<void> => {
+export const getAllAgreements = async (req: Request, res: Response): Promise<void> => {
   try {
-    const results = await AgreementService.getAllAgreements();
+    const filters = {
+      search: req.query.search as string,
+      status: req.query.status as string,
+      type: req.query.type as string,
+      myStatus: req.query.myStatus as string,
+      userRole: (req as any).user?.role,
+    };
+    const results = await AgreementService.getAllAgreements(filters);
     res.json(results);
   } catch (error) {
     console.error("Get All Agreements Error:", error);
@@ -217,5 +225,34 @@ export const getHistory = async (req: Request, res: Response): Promise<void> => 
     }
     console.error("Get History Error:", error);
     res.status(500).json({ error: "Internal server error", message: error?.message });
+  }
+};
+export const exportAgreements = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const format = req.query.format as string;
+    const filters = {
+      search: req.query.search as string,
+      status: req.query.status as string,
+      type: req.query.type as string,
+      myStatus: req.query.myStatus as string,
+      userRole: (req as any).user?.role,
+    };
+
+    if (format === "csv") {
+      const buffer = await ExportService.exportToCsv(filters);
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename=agreements.csv`);
+      res.send(buffer);
+    } else if (format === "pdf") {
+      const buffer = await ExportService.exportToPdf(filters);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=agreements.pdf`);
+      res.send(buffer);
+    } else {
+      res.status(400).json({ error: "Invalid format requested. Use 'csv' or 'pdf'." });
+    }
+  } catch (error) {
+    console.error("Export Agreements Error:", error);
+    res.status(500).json({ error: "Internal server error during export" });
   }
 };

@@ -10,7 +10,8 @@ import {
   uploadDraft,
   getRemarks,
   createRemark,
-  getHistory
+  getHistory,
+  exportAgreements
 } from "../controllers/agreement.controller";
 import { createSignOff, getSignOffs } from "../controllers/signoff.controller";
 import { authenticate } from "../middleware/auth.middleware";
@@ -27,6 +28,9 @@ router.post("/", authorizeRoles("LEGAL"), createAgreement);
 
 // Upload Draft -> LEGAL only
 router.post("/:id/drafts", authorizeRoles("LEGAL"), upload.single("file"), uploadDraft);
+
+// Export Agreements (MUST BE BEFORE /:id) -> Any authenticated user
+router.get("/export", exportAgreements);
 
 // Get All Agreements -> Any authenticated user
 router.get("/", getAllAgreements);

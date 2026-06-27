@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { useDebounce } from "@/hooks/useDebounce";
 import {
   Table,
   TableBody,
@@ -72,6 +73,13 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Filters State
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
+  const [myStatusFilter, setMyStatusFilter] = useState("");
+  const debouncedSearch = useDebounce(search, 300);
+
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -98,8 +106,14 @@ export default function DashboardPage() {
     setLoading(true);
     setError(null);
     try {
+      const params = new URLSearchParams();
+      if (debouncedSearch) params.append("search", debouncedSearch);
+      if (statusFilter) params.append("status", statusFilter);
+      if (typeFilter) params.append("type", typeFilter);
+      if (myStatusFilter) params.append("myStatus", myStatusFilter);
+
       const [agreementsRes, usersRes] = await Promise.all([
-        fetch("http://localhost:5000/api/agreements", {
+        fetch(`http://localhost:5000/api/agreements?${params.toString()}`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
         fetch("http://localhost:5000/api/users", {
@@ -120,7 +134,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, debouncedSearch, statusFilter, typeFilter, myStatusFilter]);
 
   useEffect(() => {
     fetchAgreements();
@@ -248,14 +262,45 @@ export default function DashboardPage() {
       </div>
     );
   }
+  const handleExport = async (format: "csv" | "pdf") => {
+    if (!token) return;
+    try {
+      const params = new URLSearchParams();
+      if (debouncedSearch) params.append("search", debouncedSearch);
+      if (statusFilter && statusFilter !== "ALL") params.append("status", statusFilter);
+      if (typeFilter && typeFilter !== "ALL") params.append("type", typeFilter);
+      if (myStatusFilter && myStatusFilter !== "ALL") params.append("myStatus", myStatusFilter);
+      params.append("format", format);
 
+      const res = await fetch(`http://localhost:5000/api/agreements/export?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) throw new Error(`Failed to export ${format}`);
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `agreements-${new Date().toISOString().split("T")[0]}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold tracking-tight">Agreements</h2>
         <div className="flex space-x-2">
-          <Button variant="outline" onClick={fetchAgreements} disabled={loading}>
-            {loading ? "Refreshing..." : "Refresh"}
+          <Button variant="outline" onClick={() => handleExport("csv")}>
+            Export CSV
+          </Button>
+          <Button variant="outline" onClick={() => handleExport("pdf")}>
+            Export PDF
           </Button>
 
           {user?.role === "LEGAL" && (
@@ -321,7 +366,11 @@ export default function DashboardPage() {
                         value={formData.legalSpocId}
                         onValueChange={(val) => setFormData({ ...formData, legalSpocId: val || "" })}
                       >
-                        <SelectTrigger><SelectValue placeholder="Select SPOC" /></SelectTrigger>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select SPOC">
+                            {users.find((u) => u.id === formData.legalSpocId)?.name || ""}
+                          </SelectValue>
+                        </SelectTrigger>
                         <SelectContent>
                           {users.filter(u => u.role === "LEGAL").map(u => (
                             <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
@@ -335,7 +384,11 @@ export default function DashboardPage() {
                         value={formData.financeSpocId}
                         onValueChange={(val) => setFormData({ ...formData, financeSpocId: val || "" })}
                       >
-                        <SelectTrigger><SelectValue placeholder="Select SPOC" /></SelectTrigger>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select SPOC">
+                            {users.find((u) => u.id === formData.financeSpocId)?.name || ""}
+                          </SelectValue>
+                        </SelectTrigger>
                         <SelectContent>
                           {users.filter(u => u.role === "FINANCE").map(u => (
                             <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
@@ -349,7 +402,11 @@ export default function DashboardPage() {
                         value={formData.businessSpocId}
                         onValueChange={(val) => setFormData({ ...formData, businessSpocId: val || "" })}
                       >
-                        <SelectTrigger><SelectValue placeholder="Select SPOC" /></SelectTrigger>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select SPOC">
+                            {users.find((u) => u.id === formData.businessSpocId)?.name || ""}
+                          </SelectValue>
+                        </SelectTrigger>
                         <SelectContent>
                           {users.filter(u => u.role === "BUSINESS").map(u => (
                             <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
@@ -363,7 +420,11 @@ export default function DashboardPage() {
                         value={formData.complianceSpocId}
                         onValueChange={(val) => setFormData({ ...formData, complianceSpocId: val || "" })}
                       >
-                        <SelectTrigger><SelectValue placeholder="Select SPOC" /></SelectTrigger>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select SPOC">
+                            {users.find((u) => u.id === formData.complianceSpocId)?.name || ""}
+                          </SelectValue>
+                        </SelectTrigger>
                         <SelectContent>
                           {users.filter(u => u.role === "COMPLIANCE").map(u => (
                             <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
@@ -382,6 +443,57 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      <div className="flex flex-col space-y-4 rounded-md border p-4 bg-white">
+        <div className="flex flex-col md:flex-row gap-4">
+          <Input 
+            placeholder="Search by client name..." 
+            value={search} 
+            onChange={(e) => setSearch(e.target.value)}
+            className="md:w-1/3"
+          />
+          <Select value={statusFilter || "ALL"} onValueChange={(val) => setStatusFilter(val === "ALL" ? "" : (val || ""))}>
+            <SelectTrigger className="md:w-1/4"><SelectValue placeholder="All Statuses" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All Statuses</SelectItem>
+              <SelectItem value="DRAFT">Draft</SelectItem>
+              <SelectItem value="IN_REVIEW">In Review</SelectItem>
+              <SelectItem value="PENDING_SIGNATURE">Pending Signature</SelectItem>
+              <SelectItem value="PARTIALLY_SIGNED">Partially Signed</SelectItem>
+              <SelectItem value="EXECUTED">Executed</SelectItem>
+              <SelectItem value="CANCELLED">Cancelled</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={typeFilter || "ALL"} onValueChange={(val) => setTypeFilter(val === "ALL" ? "" : (val || ""))}>
+            <SelectTrigger className="md:w-1/4"><SelectValue placeholder="All Types" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All Types</SelectItem>
+              <SelectItem value="API_DIRECT">API Direct</SelectItem>
+              <SelectItem value="WHITE_LABEL">White Label</SelectItem>
+              <SelectItem value="RESELLER">Reseller</SelectItem>
+              <SelectItem value="ENTERPRISE">Enterprise</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={myStatusFilter || "ALL"} onValueChange={(val) => setMyStatusFilter(val === "ALL" ? "" : (val || ""))}>
+            <SelectTrigger className="md:w-1/4"><SelectValue placeholder="My Status: All" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">My Status: All</SelectItem>
+              <SelectItem value="PENDING">Pending</SelectItem>
+              <SelectItem value="UNDER_REVIEW">Under Review</SelectItem>
+              <SelectItem value="APPROVED">Approved</SelectItem>
+              <SelectItem value="REJECTED">Rejected</SelectItem>
+            </SelectContent>
+          </Select>
+          {(search || statusFilter || typeFilter || myStatusFilter) && (
+            <Button variant="ghost" onClick={() => {
+              setSearch("");
+              setStatusFilter("");
+              setTypeFilter("");
+              setMyStatusFilter("");
+            }}>Clear</Button>
+          )}
+        </div>
+        <div className="text-sm text-gray-500">Showing {agreements.length} agreements</div>
+      </div>
       {agreements.length === 0 && !loading ? (
         <div className="flex h-64 flex-col items-center justify-center rounded-md border border-dashed border-gray-300 bg-gray-50">
           <p className="text-gray-500">No agreements found.</p>
