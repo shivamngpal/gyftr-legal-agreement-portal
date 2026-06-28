@@ -19,4 +19,6 @@ Thumbs.db
 
 *.txt
 *.pdf
-*.md
+project_context.md
+project_summary.md
+BRD.md
