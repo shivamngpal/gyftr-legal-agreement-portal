@@ -160,7 +160,8 @@ model Clause {
   id         String        @id @default(uuid())
   draftId    String
   draft      Draft         @relation(fields: [draftId], references: [id], onDelete: Cascade)
-  identifier String // e.g., "Clause 1.1", "Termination Clause"
+  identifier String // e.g., "1", "Article 3"
+  title      String?       // e.g., "Definitions", "Termination"
   text       String
   outcome    ClauseOutcome @default(PENDING)
   comments   String?

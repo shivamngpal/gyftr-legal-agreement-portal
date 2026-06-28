@@ -85,6 +85,7 @@ interface SignOff {
 interface Clause {
   id: string;
   identifier: string;
+  title: string | null;
   text: string;
   outcome: string;
   comments: string | null;
@@ -108,6 +109,7 @@ interface MatrixCell {
 
 interface MatrixRow {
   identifier: string;
+  title: string | null;
   cells: Record<string, MatrixCell | null>;
 }
 
@@ -263,7 +265,12 @@ const WorkspacePdfLayout = React.memo(({ fileUrl, headerContent, children, claus
                       {clauses.map((clause) => (
                         <div key={clause.id} className="rounded-lg border overflow-hidden shadow-xs">
                           <div className="bg-gray-50 dark:bg-gray-900 px-4 py-2 border-b flex items-center justify-between gap-2">
-                            <span className="font-semibold text-sm">{clause.identifier}</span>
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="font-semibold text-sm shrink-0">{clause.identifier}</span>
+                              {clause.title && (
+                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate">{clause.title}</span>
+                              )}
+                            </div>
                             {getOutcomeBadge(clause.outcome)}
                           </div>
                           <div className="flex">
@@ -991,7 +998,10 @@ export default function DraftWorkspacePage() {
                                     <span className="text-muted-foreground text-xs select-none w-3">
                                       {expandedClause === row.identifier ? "▾" : "▸"}
                                     </span>
-                                    {row.identifier}
+                                    <span className="shrink-0">{row.identifier}</span>
+                                    {row.title && (
+                                      <span className="text-xs text-muted-foreground truncate max-w-[160px]">{row.title}</span>
+                                    )}
                                   </div>
                                 </td>
                                 {matrixData.drafts.map((draft) => {
@@ -1092,11 +1102,16 @@ export default function DraftWorkspacePage() {
                       clauses.map((clause, idx) => {
                         const currentOutcome = editedClauses[clause.id]?.outcome || clause.outcome;
                         const currentComments = editedClauses[clause.id]?.comments ?? (clause.comments || "");
-                        
+
                         return (
                           <div key={idx} className="border rounded-md overflow-hidden">
                             <div className="bg-gray-50 dark:bg-gray-900 border-b px-4 py-2 flex items-center justify-between">
-                              <h4 className="font-semibold text-sm">{clause.identifier}</h4>
+                              <div className="flex items-center gap-2 min-w-0">
+                                <h4 className="font-semibold text-sm shrink-0">{clause.identifier}</h4>
+                                {clause.title && (
+                                  <span className="text-sm text-gray-600 dark:text-gray-400 truncate">{clause.title}</span>
+                                )}
+                              </div>
                               <Select
                                 value={currentOutcome}
                                 onValueChange={(val) => handleClauseChange(clause.id, "outcome", val as string)}
@@ -1165,7 +1180,12 @@ export default function DraftWorkspacePage() {
                       return (
                         <div key={idx} className="border rounded-md overflow-hidden">
                           <div className="bg-gray-50 dark:bg-gray-900 border-b px-4 py-2 flex items-center justify-between gap-2">
-                            <h4 className="font-semibold text-sm">{comp.identifier}</h4>
+                            <div className="flex items-center gap-2 min-w-0">
+                              <h4 className="font-semibold text-sm shrink-0">{comp.identifier}</h4>
+                              {comp.currentClause.title && (
+                                <span className="text-sm text-gray-600 dark:text-gray-400 truncate">{comp.currentClause.title}</span>
+                              )}
+                            </div>
                             {comp.baseClause && (
                               comp.hasDiff
                                 ? <Badge variant="outline" className="text-[11px] border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300">Changed</Badge>
@@ -1254,7 +1274,12 @@ export default function DraftWorkspacePage() {
                       {clauses.map((clause) => (
                         <div key={clause.id} className="p-4 border rounded-md">
                           <div className="flex items-center justify-between mb-2">
-                            <h4 className="font-semibold text-sm">{clause.identifier}</h4>
+                            <div className="flex items-center gap-2 min-w-0">
+                              <h4 className="font-semibold text-sm shrink-0">{clause.identifier}</h4>
+                              {clause.title && (
+                                <span className="text-sm text-gray-600 dark:text-gray-400 truncate">{clause.title}</span>
+                              )}
+                            </div>
                             <Badge 
                               variant={clause.outcome === "ACCEPTED" ? "default" : clause.outcome === "HELD" ? "destructive" : "outline"}
                             >

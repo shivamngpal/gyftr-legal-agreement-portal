@@ -13,6 +13,7 @@ export class DraftService {
       select: {
         id: true,
         identifier: true,
+        title: true,
         text: true,
         outcome: true,
         comments: true,
@@ -86,6 +87,7 @@ export class DraftService {
           select: {
             id: true,
             identifier: true,
+            title: true,
             text: true,
             outcome: true,
             comments: true,
@@ -107,13 +109,17 @@ export class DraftService {
 
     const rows = identifiers.map((identifier) => {
       const cells: Record<string, { id: string; text: string; outcome: string; comments: string | null } | null> = {};
+      let title: string | null = null;
       for (const draft of drafts) {
         const clause = draft.clauses.find((c) => c.identifier === identifier);
-        cells[draft.id] = clause
-          ? { id: clause.id, text: clause.text, outcome: clause.outcome as string, comments: clause.comments }
-          : null;
+        if (clause) {
+          cells[draft.id] = { id: clause.id, text: clause.text, outcome: clause.outcome as string, comments: clause.comments };
+          if (!title && clause.title) title = clause.title;
+        } else {
+          cells[draft.id] = null;
+        }
       }
-      return { identifier, cells };
+      return { identifier, title, cells };
     });
 
     return {

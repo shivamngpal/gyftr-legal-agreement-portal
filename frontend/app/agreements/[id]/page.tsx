@@ -227,6 +227,8 @@ export default function AgreementDetailsPage() {
 
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [isUploadConfirmOpen, setIsUploadConfirmOpen] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
 
   const [remarks, setRemarks] = useState<Remark[]>([]);
   const [history, setHistory] = useState<HistoryLog[]>([]);
@@ -373,45 +375,62 @@ export default function AgreementDetailsPage() {
     toast.success("Global remark added");
   }, [id, token, fetchRemarks]);
 
-  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.type !== "application/pdf") {
-      toast.error("Only PDF files are allowed");
-      return;
-    }
-
+  const doUpload = useCallback(async (file: File) => {
     if (!token) return;
     setIsUploading(true);
-
     const formData = new FormData();
     formData.append("file", file);
-
     try {
       const res = await fetch(`${API_URL}/api/agreements/${id}/drafts`, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
-
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.message || data.error || "Failed to upload draft");
       }
-
       toast.success("Draft uploaded successfully");
       fetchAllData();
     } catch (err: any) {
       toast.error(err.message);
     } finally {
       setIsUploading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }, [id, token, fetchAllData]);
+
+  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.type !== "application/pdf") {
+      toast.error("Only PDF files are allowed");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    if (agreement?.status === "EXECUTED") {
+      setPendingFile(file);
+      setIsUploadConfirmOpen(true);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    await doUpload(file);
+  }, [agreement, doUpload]);
+
+  const handleConfirmUpload = useCallback(async () => {
+    setIsUploadConfirmOpen(false);
+    if (!pendingFile) return;
+    const file = pendingFile;
+    setPendingFile(null);
+    await doUpload(file);
+  }, [pendingFile, doUpload]);
+
+  const handleCancelUpload = useCallback(() => {
+    setIsUploadConfirmOpen(false);
+    setPendingFile(null);
+  }, []);
 
   const getSpocDisplay = (spoc: Spoc | null) => {
     return spoc ? (
@@ -570,7 +589,7 @@ export default function AgreementDetailsPage() {
                   accept="application/pdf"
                   ref={fileInputRef}
                   className="hidden"
-                  onChange={handleFileUpload}
+                  onChange={handleFileChange}
                 />
                 <Button
                   size="sm"
@@ -623,6 +642,26 @@ export default function AgreementDetailsPage() {
         <HistorySection history={history} />
 
       </div>
+
+      {/* Upload Confirmation Dialog */}
+      <Dialog open={isUploadConfirmOpen} onOpenChange={setIsUploadConfirmOpen}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>Agreement Already Executed</DialogTitle>
+            <DialogDescription>
+              This agreement is currently <strong>Executed</strong>. Uploading a new draft will
+              reset the agreement status back to Draft and all team review statuses to Pending. Do
+              you still want to proceed?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={handleCancelUpload}>
+              Cancel
+            </Button>
+            <Button onClick={handleConfirmUpload}>Yes, Upload New Draft</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Agreement Dialog */}
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>

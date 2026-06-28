@@ -33,10 +33,9 @@ export class AgreementService {
     }
 
     // 2. Upload to S3 and extract clauses in parallel (they're independent)
-    const truncatedText = pdfText.length > 15000 ? pdfText.slice(0, 15000) : pdfText;
     const [fileUrl, extractedClauses] = await Promise.all([
       S3Service.uploadPdf(fileBuffer, fileName, agreementId),
-      AIService.extractClauses(truncatedText),
+      AIService.extractClauses(pdfText),
     ]);
 
     return await prisma.$transaction(async (tx) => {
@@ -71,12 +70,20 @@ export class AgreementService {
           data: extractedClauses.map((c) => ({
             draftId: draft.id,
             identifier: c.identifier || "Unknown",
+            title: c.title || null,
             text: c.text || "",
             outcome: "PENDING",
             comments: null,
           })),
         });
       }
+
+      // Reset agreement status to DRAFT whenever a new version is uploaded
+      const previousStatus = agreement.status;
+      await tx.agreement.update({
+        where: { id: agreementId },
+        data: { status: "DRAFT" },
+      });
 
       // History Log: Draft Uploaded
       await tx.historyLog.create({
@@ -88,6 +95,19 @@ export class AgreementService {
           details: `Uploaded Draft Version ${nextVersion}`,
         },
       });
+
+      // History Log: Status reset (only if it actually changed)
+      if (previousStatus !== "DRAFT") {
+        await tx.historyLog.create({
+          data: {
+            agreementId,
+            draftId: draft.id,
+            actorId,
+            action: "STATUS_CHANGE",
+            details: `Agreement status reset from ${previousStatus} to DRAFT after new draft upload`,
+          },
+        });
+      }
 
       // History Log: AI Extraction
       await tx.historyLog.create({

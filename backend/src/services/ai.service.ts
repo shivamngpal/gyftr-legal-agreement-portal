@@ -8,17 +8,29 @@ const openai = new OpenAI({
 export class AIService {
   static async extractClauses(text: string) {
     const prompt = `
-You are a legal AI assistant. Your ONLY job is to identify and extract clauses from the provided agreement text.
-Return the result as structured JSON.
-Do not assign outcomes. Do not determine risk. Do not suggest wording. Do not summarize.
+You are a legal AI assistant. Extract all clauses from the provided agreement text and return structured JSON.
 
-Expected JSON Structure:
+EXTRACTION RULES — follow exactly:
+1. Extract only TOP-LEVEL sections/articles (e.g. "1. Definitions", "Article 2 – Payment Terms", "CLAUSE 5 – TERMINATION").
+2. Do NOT create separate entries for sub-clauses (1.1, 1.2, a), b), i), ii), etc.). Include them in the parent section's "text" field verbatim.
+3. "identifier" = the raw section/article number or label as it appears in the document (e.g. "1", "2", "Article 3", "Clause IV").
+4. "title" = the section heading in plain English (e.g. "Definitions", "Scope of Services", "Termination"). Extract it from the document; do not invent it.
+5. "text" = the complete verbatim text of the section, including all sub-clauses, exactly as written in the document.
+6. Preserve the order clauses appear in the document.
+7. Every clause MUST have a non-empty "identifier" and a non-empty "title".
+
+Return ONLY this JSON — no explanation, no markdown:
 {
   "clauses": [
     {
-      "identifier": "string (e.g. '1.1', 'Termination')",
-      "title": "string (e.g. 'Payment Terms')",
-      "text": "string (the full text of the clause)"
+      "identifier": "1",
+      "title": "Definitions",
+      "text": "1. Definitions\\n1.1 \\"Affiliate\\" means ...\\n1.2 \\"Business Day\\" means ..."
+    },
+    {
+      "identifier": "2",
+      "title": "Scope of Services",
+      "text": "2. Scope of Services\\n2.1 Gyftr shall provide ..."
     }
   ]
 }
@@ -29,7 +41,7 @@ ${text}
 
     try {
       const response = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
+        model: "gpt-4.1-mini",
         messages: [{ role: "user", content: prompt }],
         response_format: { type: "json_object" },
         temperature: 0,
