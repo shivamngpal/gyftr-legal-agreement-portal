@@ -242,59 +242,59 @@ const WorkspacePdfLayout = React.memo(({ fileUrl, headerContent, children, claus
         )}
       </div>
 
-      <div className={isDocVisible ? "h-[calc(100vh-140px)]" : ""}>
-        <PanelGroup orientation="horizontal" style={isDocVisible ? {} : { overflow: "visible" }}>
-          {/* Left Panel */}
-          <Panel defaultSize={100} minSize={30} style={isDocVisible ? {} : { overflow: "visible" }}>
-            <div className={`w-full space-y-6 pb-10 block ${isDocVisible ? "h-full overflow-y-auto pr-4" : ""}`}>
-              {children}
-            </div>
-          </Panel>
-          {/* Right Panel — PDF or Live Draft */}
-          {isDocVisible && (
-            <>
-              <PanelResizeHandle className="w-2 bg-gray-200 cursor-col-resize hover:bg-gray-300 active:bg-blue-500 transition-colors mx-4 rounded-full" />
-              <Panel defaultSize={60} minSize={30}>
-                {rightView === "pdf" && fileUrl ? (
-                  <div className="w-full h-full border rounded-lg overflow-hidden bg-white shadow-sm flex-shrink-0">
-                    <iframe src={fileUrl} className="w-full h-full border-0" title="PDF Viewer" />
-                  </div>
-                ) : (
-                  <div className="w-full h-full border rounded-lg overflow-y-auto bg-white shadow-sm">
-                    {clauses && clauses.length > 0 ? (
-                      <div className="max-w-2xl mx-auto py-6 px-4 space-y-4">
-                        {clauses.map((clause) => (
-                          <div key={clause.id} className="rounded-lg border overflow-hidden shadow-xs">
-                            <div className="bg-gray-50 dark:bg-gray-900 px-4 py-2 border-b flex items-center justify-between gap-2">
-                              <span className="font-semibold text-sm">{clause.identifier}</span>
-                              {getOutcomeBadge(clause.outcome)}
-                            </div>
-                            <div className="flex">
-                              <div className="flex-1 p-4 text-sm text-gray-800 dark:text-gray-200 leading-relaxed whitespace-pre-wrap">
-                                {clause.text}
-                              </div>
-                              {clause.comments && (
-                                <div className="w-36 shrink-0 border-l bg-amber-50 dark:bg-amber-900/20 p-3">
-                                  <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-1">Legal Note</p>
-                                  <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">{clause.comments}</p>
-                                </div>
-                              )}
-                            </div>
+      {isDocVisible ? (
+        <div className="h-[calc(100vh-140px)]">
+          <PanelGroup orientation="horizontal">
+            <Panel defaultSize={40} minSize={25}>
+              <div className="h-full overflow-y-auto pr-4 space-y-6 pb-10">
+                {children}
+              </div>
+            </Panel>
+            <PanelResizeHandle className="w-2 bg-gray-200 cursor-col-resize hover:bg-gray-300 active:bg-blue-500 transition-colors mx-4 rounded-full" />
+            <Panel defaultSize={60} minSize={30}>
+              {rightView === "pdf" && fileUrl ? (
+                <div className="w-full h-full border rounded-lg overflow-hidden bg-white shadow-sm">
+                  <iframe src={fileUrl} className="w-full h-full border-0" title="PDF Viewer" />
+                </div>
+              ) : (
+                <div className="w-full h-full border rounded-lg overflow-y-auto bg-white shadow-sm">
+                  {clauses && clauses.length > 0 ? (
+                    <div className="max-w-2xl mx-auto py-6 px-4 space-y-4">
+                      {clauses.map((clause) => (
+                        <div key={clause.id} className="rounded-lg border overflow-hidden shadow-xs">
+                          <div className="bg-gray-50 dark:bg-gray-900 px-4 py-2 border-b flex items-center justify-between gap-2">
+                            <span className="font-semibold text-sm">{clause.identifier}</span>
+                            {getOutcomeBadge(clause.outcome)}
                           </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-center h-full">
-                        <p className="text-sm text-muted-foreground">No clauses extracted for this draft.</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </Panel>
-            </>
-          )}
-        </PanelGroup>
-      </div>
+                          <div className="flex">
+                            <div className="flex-1 p-4 text-sm text-gray-800 dark:text-gray-200 leading-relaxed whitespace-pre-wrap">
+                              {clause.text}
+                            </div>
+                            {clause.comments && (
+                              <div className="w-36 shrink-0 border-l bg-amber-50 dark:bg-amber-900/20 p-3">
+                                <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-1">Legal Note</p>
+                                <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">{clause.comments}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center h-full">
+                      <p className="text-sm text-muted-foreground">No clauses extracted for this draft.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </Panel>
+          </PanelGroup>
+        </div>
+      ) : (
+        <div className="space-y-6 pb-10">
+          {children}
+        </div>
+      )}
     </div>
   );
 });
@@ -319,6 +319,9 @@ export default function DraftWorkspacePage() {
   const [isSavingClauses, setIsSavingClauses] = useState(false);
   const [isSignOffModalOpen, setIsSignOffModalOpen] = useState(false);
   const [isSubmittingSignOff, setIsSubmittingSignOff] = useState(false);
+  const [reminderTeam, setReminderTeam] = useState("FINANCE");
+  const [reminderMessage, setReminderMessage] = useState("");
+  const [isSendingReminder, setIsSendingReminder] = useState(false);
   const selectedDraftId = draftId;
 
   const fetchAgreementData = useCallback(async () => {
@@ -399,6 +402,28 @@ export default function DraftWorkspacePage() {
       setIsSubmittingSignOff(false);
     }
   }, [id, token, fetchSignOffs, fetchAgreementData]);
+
+  const handleSendReminder = useCallback(async () => {
+    if (!token || !reminderTeam) return;
+    setIsSendingReminder(true);
+    try {
+      const res = await fetch(`${API_URL}/api/reminders`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ agreementId: id, targetTeam: reminderTeam, message: reminderMessage || undefined }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || data.error || "Failed to send reminder");
+      }
+      toast.success(`Reminder sent to ${reminderTeam.charAt(0) + reminderTeam.slice(1).toLowerCase()} team`);
+      setReminderMessage("");
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setIsSendingReminder(false);
+    }
+  }, [id, token, reminderTeam, reminderMessage]);
 
   useEffect(() => {
     fetchAllData();
@@ -681,7 +706,7 @@ export default function DraftWorkspacePage() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 pb-10">
+    <div className="pt-8 px-6">
 
       <WorkspacePdfLayout
         fileUrl={currentDraft?.fileUrl}
@@ -735,7 +760,7 @@ export default function DraftWorkspacePage() {
                     <Select
                       disabled={isUpdating === team}
                       value={status}
-                      onValueChange={(val) => handleStatusUpdate(team, val || "")}
+                      onValueChange={(val) => { if (val) handleStatusUpdate(team, val); }}
                     >
                       <SelectTrigger className="w-[140px] h-8 text-xs">
                         <SelectValue placeholder="Update Status" />
@@ -1257,7 +1282,43 @@ export default function DraftWorkspacePage() {
               </CardContent>
             </Card>
           )}
-          <PlaceholderCard title="Reminders" />
+          {user?.role === "LEGAL" && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Send Reminder</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Notify Team</p>
+                  <Select value={reminderTeam} onValueChange={(val) => { if (val) setReminderTeam(val); }}>
+                    <SelectTrigger className="w-48">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="FINANCE">Finance</SelectItem>
+                      <SelectItem value="BUSINESS">Business</SelectItem>
+                      <SelectItem value="COMPLIANCE">Compliance</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Message (optional)</p>
+                  <textarea
+                    className="flex min-h-[72px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    placeholder="Add a note for the team..."
+                    value={reminderMessage}
+                    onChange={(e) => setReminderMessage(e.target.value)}
+                    disabled={isSendingReminder}
+                  />
+                </div>
+                <div className="flex justify-end">
+                  <Button onClick={handleSendReminder} disabled={isSendingReminder}>
+                    {isSendingReminder ? "Sending..." : "Send Reminder"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Sign-Off Section */}
           <Card>
@@ -1347,17 +1408,3 @@ export default function DraftWorkspacePage() {
   );
 }
 
-function PlaceholderCard({ title }: { title: string }) {
-  return (
-    <Card className="bg-gray-50 border-dashed">
-      <CardHeader>
-        <CardTitle className="text-md text-gray-700">{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p className="text-sm text-muted-foreground">
-          This feature will be implemented in a later task.
-        </p>
-      </CardContent>
-    </Card>
-  );
-}

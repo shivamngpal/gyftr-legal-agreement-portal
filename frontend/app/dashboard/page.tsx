@@ -819,7 +819,7 @@ export default function DashboardPage() {
                             onClick={() => {
                               setRemindAgreementId(item.agreementId);
                               setRemindDefaultTeam(
-                                item.blockingTeams[0] ?? ""
+                                item.blockingTeams.find((t) => t !== "LEGAL") ?? ""
                               );
                               setIsRemindModalOpen(true);
                             }}

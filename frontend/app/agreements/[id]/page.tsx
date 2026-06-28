@@ -407,7 +407,7 @@ export default function AgreementDetailsPage() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 pb-10">
+    <div className="space-y-6 pt-8 pb-10 px-6">
       {/* Header Area */}
       <div className="flex items-center gap-4">
         <Link href="/dashboard">
@@ -450,7 +450,10 @@ export default function AgreementDetailsPage() {
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Last Updated</p>
-              <p className="font-medium">{new Date(agreement.updatedAt).toLocaleDateString()}</p>
+              <p className="font-medium">{new Date(Math.max(
+                new Date(agreement.updatedAt).getTime(),
+                ...agreement.drafts.flatMap(d => d.reviewStatuses || []).map(rs => new Date(rs.updatedAt).getTime())
+              )).toLocaleDateString()}</p>
             </div>
           </CardContent>
         </Card>
