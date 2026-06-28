@@ -319,7 +319,7 @@ export default function DraftWorkspacePage() {
   const [isSavingClauses, setIsSavingClauses] = useState(false);
   const [isSignOffModalOpen, setIsSignOffModalOpen] = useState(false);
   const [isSubmittingSignOff, setIsSubmittingSignOff] = useState(false);
-  const [reminderTeam, setReminderTeam] = useState("FINANCE");
+  const [reminderTeam, setReminderTeam] = useState("Finance");
   const [reminderMessage, setReminderMessage] = useState("");
   const [isSendingReminder, setIsSendingReminder] = useState(false);
   const selectedDraftId = draftId;
@@ -410,13 +410,13 @@ export default function DraftWorkspacePage() {
       const res = await fetch(`${API_URL}/api/reminders`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ agreementId: id, targetTeam: reminderTeam, message: reminderMessage || undefined }),
+        body: JSON.stringify({ agreementId: id, targetTeam: reminderTeam.toUpperCase(), message: reminderMessage || undefined }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.message || data.error || "Failed to send reminder");
       }
-      toast.success(`Reminder sent to ${reminderTeam.charAt(0) + reminderTeam.slice(1).toLowerCase()} team`);
+      toast.success(`Reminder sent to ${reminderTeam} team`);
       setReminderMessage("");
     } catch (err: any) {
       toast.error(err.message);
@@ -1295,9 +1295,9 @@ export default function DraftWorkspacePage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="FINANCE">Finance</SelectItem>
-                      <SelectItem value="BUSINESS">Business</SelectItem>
-                      <SelectItem value="COMPLIANCE">Compliance</SelectItem>
+                      <SelectItem value="Finance">Finance</SelectItem>
+                      <SelectItem value="Business">Business</SelectItem>
+                      <SelectItem value="Compliance">Compliance</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

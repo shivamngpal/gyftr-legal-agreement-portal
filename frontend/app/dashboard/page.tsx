@@ -122,7 +122,7 @@ const RemindModal = React.memo(
           },
           body: JSON.stringify({
             agreementId,
-            targetTeam: remindData.targetTeam,
+            targetTeam: remindData.targetTeam.toUpperCase(),
             message: remindData.message,
           }),
         });
@@ -164,9 +164,9 @@ const RemindModal = React.memo(
                   <SelectValue placeholder="Select team" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="FINANCE">Finance</SelectItem>
-                  <SelectItem value="BUSINESS">Business</SelectItem>
-                  <SelectItem value="COMPLIANCE">Compliance</SelectItem>
+                  <SelectItem value="Finance">Finance</SelectItem>
+                  <SelectItem value="Business">Business</SelectItem>
+                  <SelectItem value="Compliance">Compliance</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -818,9 +818,8 @@ export default function DashboardPage() {
                             variant="secondary"
                             onClick={() => {
                               setRemindAgreementId(item.agreementId);
-                              setRemindDefaultTeam(
-                                item.blockingTeams.find((t) => t !== "LEGAL") ?? ""
-                              );
+                              const raw = item.blockingTeams.find((t) => t !== "LEGAL") ?? "";
+                              setRemindDefaultTeam(raw ? raw.charAt(0) + raw.slice(1).toLowerCase() : "");
                               setIsRemindModalOpen(true);
                             }}
                           >
