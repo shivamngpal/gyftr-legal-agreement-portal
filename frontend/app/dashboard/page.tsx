@@ -556,7 +556,7 @@ export default function DashboardPage() {
                             .filter((u) => u.role === "LEGAL")
                             .map((u) => (
                               <SelectItem key={u.id} value={u.id}>
-                                {u.name}
+                                {u.name} Lead
                               </SelectItem>
                             ))}
                         </SelectContent>
@@ -578,7 +578,7 @@ export default function DashboardPage() {
                             .filter((u) => u.role === "FINANCE")
                             .map((u) => (
                               <SelectItem key={u.id} value={u.id}>
-                                {u.name}
+                                {u.name} Lead
                               </SelectItem>
                             ))}
                         </SelectContent>
@@ -600,7 +600,7 @@ export default function DashboardPage() {
                             .filter((u) => u.role === "BUSINESS")
                             .map((u) => (
                               <SelectItem key={u.id} value={u.id}>
-                                {u.name}
+                                {u.name} Lead
                               </SelectItem>
                             ))}
                         </SelectContent>
@@ -622,7 +622,7 @@ export default function DashboardPage() {
                             .filter((u) => u.role === "COMPLIANCE")
                             .map((u) => (
                               <SelectItem key={u.id} value={u.id}>
-                                {u.name}
+                                {u.name} Lead
                               </SelectItem>
                             ))}
                         </SelectContent>

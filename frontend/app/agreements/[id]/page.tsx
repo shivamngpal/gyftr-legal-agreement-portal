@@ -415,7 +415,7 @@ export default function AgreementDetailsPage() {
 
   const getSpocDisplay = (spoc: Spoc | null) => {
     return spoc ? (
-      <p className="text-sm font-medium">{spoc.name}</p>
+      <p className="text-sm font-medium">{spoc.name} Lead</p>
     ) : (
       <p className="text-sm text-muted-foreground italic">Not Assigned</p>
     );
@@ -678,7 +678,7 @@ export default function AgreementDetailsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       {users.filter(u => u.role === role).map(u => (
-                        <SelectItem key={u.id} value={u.name}>{u.name}</SelectItem>
+                        <SelectItem key={u.id} value={u.name}>{u.name} Lead</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
