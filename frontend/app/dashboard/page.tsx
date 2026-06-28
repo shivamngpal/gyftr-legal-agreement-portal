@@ -35,6 +35,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface ReviewStatus {
   team: string;
@@ -97,33 +98,40 @@ interface RemindModalProps {
   defaultTeam?: string;
 }
 
+const REMINDER_TEAMS = ["Finance", "Business", "Compliance"] as const;
+
 const RemindModal = React.memo(
   ({ isOpen, onClose, agreementId, token, defaultTeam }: RemindModalProps) => {
-    const [remindData, setRemindData] = useState({ targetTeam: "", message: "" });
+    const [targetTeams, setTargetTeams] = useState<string[]>([]);
+    const [message, setMessage] = useState("");
     const [isReminding, setIsReminding] = useState(false);
 
     useEffect(() => {
       if (isOpen) {
-        setRemindData({ targetTeam: defaultTeam ?? "", message: "" });
+        setTargetTeams(defaultTeam ? [defaultTeam] : []);
+        setMessage("");
       }
     }, [isOpen, defaultTeam]);
 
+    const toggleTeam = (team: string) => {
+      setTargetTeams((prev) =>
+        prev.includes(team) ? prev.filter((t) => t !== team) : [...prev, team]
+      );
+    };
+
     const handleSendReminder = async (e: React.FormEvent) => {
       e.preventDefault();
-      if (!token || !agreementId || !remindData.targetTeam) return;
+      if (!token || !agreementId || targetTeams.length === 0) return;
       setIsReminding(true);
 
       try {
         const res = await fetch(`${API_URL}/api/reminders`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({
             agreementId,
-            targetTeam: remindData.targetTeam.toUpperCase(),
-            message: remindData.message,
+            targetTeams: targetTeams.map((t) => t.toUpperCase()),
+            message: message || undefined,
           }),
         });
 
@@ -133,7 +141,11 @@ const RemindModal = React.memo(
         }
 
         onClose(false);
-        toast.success("Reminder sent successfully");
+        toast.success(
+          targetTeams.length === 1
+            ? `Reminder sent to ${targetTeams[0]}`
+            : `Reminders sent to ${targetTeams.join(", ")}`
+        );
       } catch (err: any) {
         toast.error(err.message);
       } finally {
@@ -147,42 +159,40 @@ const RemindModal = React.memo(
           <DialogHeader>
             <DialogTitle>Send Reminder</DialogTitle>
             <DialogDescription>
-              Nudge a team to review this agreement.
+              Nudge one or more teams to review this agreement.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSendReminder} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="targetTeam">Target Team</Label>
-              <Select
-                value={remindData.targetTeam}
-                onValueChange={(val) =>
-                  setRemindData({ ...remindData, targetTeam: val || "" })
-                }
-                required
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select team" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Finance">Finance</SelectItem>
-                  <SelectItem value="Business">Business</SelectItem>
-                  <SelectItem value="Compliance">Compliance</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label>Target Teams</Label>
+              <div className="flex gap-6 pt-1">
+                {REMINDER_TEAMS.map((team) => (
+                  <label key={team} className="flex items-center gap-2 cursor-pointer select-none">
+                    <Checkbox
+                      checked={targetTeams.includes(team)}
+                      onCheckedChange={() => toggleTeam(team)}
+                      disabled={isReminding}
+                    />
+                    <span className="text-sm">{team}</span>
+                  </label>
+                ))}
+              </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="message">Message (Optional)</Label>
+              <Label htmlFor="remind-message">Message (Optional)</Label>
               <Input
-                id="message"
+                id="remind-message"
                 placeholder="Add a note for the team..."
-                value={remindData.message}
-                onChange={(e) =>
-                  setRemindData({ ...remindData, message: e.target.value })
-                }
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
                 disabled={isReminding}
               />
             </div>
-            <Button type="submit" className="w-full" disabled={isReminding}>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={isReminding || targetTeams.length === 0}
+            >
               {isReminding ? "Sending..." : "Send Reminder"}
             </Button>
           </form>

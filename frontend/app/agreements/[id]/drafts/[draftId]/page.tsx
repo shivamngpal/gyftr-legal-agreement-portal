@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -327,7 +328,7 @@ export default function DraftWorkspacePage() {
   const [isSignOffModalOpen, setIsSignOffModalOpen] = useState(false);
   const [isSubmittingSignOff, setIsSubmittingSignOff] = useState(false);
   const [clauseStatusSuggestion, setClauseStatusSuggestion] = useState<"APPROVED" | "REJECTED" | null>(null);
-  const [reminderTeam, setReminderTeam] = useState("Finance");
+  const [reminderTeams, setReminderTeams] = useState<string[]>([]);
   const [reminderMessage, setReminderMessage] = useState("");
   const [isSendingReminder, setIsSendingReminder] = useState(false);
   const selectedDraftId = draftId;
@@ -411,27 +412,42 @@ export default function DraftWorkspacePage() {
     }
   }, [id, token, fetchSignOffs, fetchAgreementData]);
 
+  const toggleReminderTeam = useCallback((team: string) => {
+    setReminderTeams((prev) =>
+      prev.includes(team) ? prev.filter((t) => t !== team) : [...prev, team]
+    );
+  }, []);
+
   const handleSendReminder = useCallback(async () => {
-    if (!token || !reminderTeam) return;
+    if (!token || reminderTeams.length === 0) return;
     setIsSendingReminder(true);
     try {
       const res = await fetch(`${API_URL}/api/reminders`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ agreementId: id, targetTeam: reminderTeam.toUpperCase(), message: reminderMessage || undefined }),
+        body: JSON.stringify({
+          agreementId: id,
+          targetTeams: reminderTeams.map((t) => t.toUpperCase()),
+          message: reminderMessage || undefined,
+        }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.message || data.error || "Failed to send reminder");
       }
-      toast.success(`Reminder sent to ${reminderTeam} team`);
+      toast.success(
+        reminderTeams.length === 1
+          ? `Reminder sent to ${reminderTeams[0]}`
+          : `Reminders sent to ${reminderTeams.join(", ")}`
+      );
+      setReminderTeams([]);
       setReminderMessage("");
     } catch (err: any) {
       toast.error(err.message);
     } finally {
       setIsSendingReminder(false);
     }
-  }, [id, token, reminderTeam, reminderMessage]);
+  }, [id, token, reminderTeams, reminderMessage]);
 
   useEffect(() => {
     fetchAllData();
@@ -1378,17 +1394,19 @@ export default function DraftWorkspacePage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Notify Team</p>
-                  <Select value={reminderTeam} onValueChange={(val) => { if (val) setReminderTeam(val); }}>
-                    <SelectTrigger className="w-48">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Finance">Finance</SelectItem>
-                      <SelectItem value="Business">Business</SelectItem>
-                      <SelectItem value="Compliance">Compliance</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Notify Teams</p>
+                  <div className="flex gap-6 pt-1">
+                    {(["Finance", "Business", "Compliance"] as const).map((team) => (
+                      <label key={team} className="flex items-center gap-2 cursor-pointer select-none">
+                        <Checkbox
+                          checked={reminderTeams.includes(team)}
+                          onCheckedChange={() => toggleReminderTeam(team)}
+                          disabled={isSendingReminder}
+                        />
+                        <span className="text-sm">{team}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Message (optional)</p>
@@ -1401,7 +1419,10 @@ export default function DraftWorkspacePage() {
                   />
                 </div>
                 <div className="flex justify-end">
-                  <Button onClick={handleSendReminder} disabled={isSendingReminder}>
+                  <Button
+                    onClick={handleSendReminder}
+                    disabled={isSendingReminder || reminderTeams.length === 0}
+                  >
                     {isSendingReminder ? "Sending..." : "Send Reminder"}
                   </Button>
                 </div>

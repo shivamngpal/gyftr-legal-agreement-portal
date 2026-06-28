@@ -5,7 +5,7 @@ import { z } from "zod";
 
 const createReminderSchema = z.object({
   agreementId: z.string().uuid(),
-  targetTeam: z.nativeEnum(Role),
+  targetTeams: z.array(z.nativeEnum(Role)).min(1, "Select at least one team"),
   message: z.string().optional(),
 });
 
@@ -19,15 +19,15 @@ export const createReminder = async (req: Request, res: Response): Promise<void>
       return;
     }
 
-    const { agreementId, targetTeam, message } = createReminderSchema.parse(req.body);
+    const { agreementId, targetTeams, message } = createReminderSchema.parse(req.body);
 
-    if (targetTeam === Role.LEGAL) {
+    if (targetTeams.includes(Role.LEGAL)) {
       res.status(400).json({ error: "Cannot send a reminder to the LEGAL team." });
       return;
     }
 
-    const reminder = await ReminderService.createReminder(userId, agreementId, targetTeam, message);
-    res.status(201).json(reminder);
+    const reminders = await ReminderService.createReminders(userId, agreementId, targetTeams, message);
+    res.status(201).json(reminders);
   } catch (error: any) {
     if (error instanceof z.ZodError || error?.name === "ZodError") {
       res.status(400).json({ error: "Validation failed", details: error.errors });
