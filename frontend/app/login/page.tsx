@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { useAuth } from "@/lib/auth";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -91,9 +91,7 @@ export default function LoginPage() {
                   disabled={loading}
                 />
               </div>
-            </CardContent>
-            <CardFooter className="flex-col gap-4">
-              <Button type="submit" className="w-full" disabled={loading}>
+              <Button type="submit" className="w-full mt-2" disabled={loading}>
                 {loading ? "Signing in..." : "Sign in"}
               </Button>
 
@@ -122,7 +120,7 @@ export default function LoginPage() {
                   password: <span className="font-mono">password123</span>
                 </p>
               </div>
-            </CardFooter>
+            </CardContent>
           </form>
         </Card>
       </div>
