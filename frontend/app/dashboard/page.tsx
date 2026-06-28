@@ -540,94 +540,43 @@ export default function DashboardPage() {
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Legal SPOC</Label>
-                      <Select
-                        value={formData.legalSpocId || undefined}
-                        onValueChange={(val) =>
-                          setFormData({ ...formData, legalSpocId: val || "" })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select SPOC" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {users
-                            .filter((u) => u.role === "LEGAL")
-                            .map((u) => (
-                              <SelectItem key={u.id} value={u.id}>
-                                {u.name} Lead
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Finance SPOC</Label>
-                      <Select
-                        value={formData.financeSpocId || undefined}
-                        onValueChange={(val) =>
-                          setFormData({ ...formData, financeSpocId: val || "" })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select SPOC" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {users
-                            .filter((u) => u.role === "FINANCE")
-                            .map((u) => (
-                              <SelectItem key={u.id} value={u.id}>
-                                {u.name} Lead
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Business SPOC</Label>
-                      <Select
-                        value={formData.businessSpocId || undefined}
-                        onValueChange={(val) =>
-                          setFormData({ ...formData, businessSpocId: val || "" })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select SPOC" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {users
-                            .filter((u) => u.role === "BUSINESS")
-                            .map((u) => (
-                              <SelectItem key={u.id} value={u.id}>
-                                {u.name} Lead
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Compliance SPOC</Label>
-                      <Select
-                        value={formData.complianceSpocId || undefined}
-                        onValueChange={(val) =>
-                          setFormData({ ...formData, complianceSpocId: val || "" })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select SPOC" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {users
-                            .filter((u) => u.role === "COMPLIANCE")
-                            .map((u) => (
-                              <SelectItem key={u.id} value={u.id}>
-                                {u.name} Lead
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    {(
+                      [
+                        { label: "Legal SPOC",      field: "legalSpocId",      role: "LEGAL" },
+                        { label: "Finance SPOC",    field: "financeSpocId",    role: "FINANCE" },
+                        { label: "Business SPOC",   field: "businessSpocId",   role: "BUSINESS" },
+                        { label: "Compliance SPOC", field: "complianceSpocId", role: "COMPLIANCE" },
+                      ] as const
+                    ).map(({ label, field, role }) => {
+                      const selectedId = formData[field];
+                      const selectedName = users.find((u) => u.id === selectedId)?.name;
+                      return (
+                        <div key={field} className="space-y-2">
+                          <Label>{label}</Label>
+                          <Select
+                            value={selectedId || undefined}
+                            onValueChange={(val) =>
+                              setFormData({ ...formData, [field]: val || "" })
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select SPOC">
+                                {selectedName ? `${selectedName} Lead` : undefined}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              {users
+                                .filter((u) => u.role === role)
+                                .map((u) => (
+                                  <SelectItem key={u.id} value={u.id}>
+                                    {u.name} Lead
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      );
+                    })}
                   </div>
                   <Button type="submit" className="w-full" disabled={isSubmitting}>
                     {isSubmitting ? "Creating..." : "Create Agreement"}
