@@ -85,6 +85,20 @@ export class AgreementService {
         data: { status: "DRAFT" },
       });
 
+      // Clear existing sign-offs — they were for the previous version
+      const deletedSignOffs = await tx.signOff.deleteMany({ where: { agreementId } });
+      if (deletedSignOffs.count > 0) {
+        await tx.historyLog.create({
+          data: {
+            agreementId,
+            draftId: draft.id,
+            actorId,
+            action: "SIGN_OFFS_CLEARED",
+            details: `${deletedSignOffs.count} sign-off(s) cleared due to new draft upload`,
+          },
+        });
+      }
+
       // History Log: Draft Uploaded
       await tx.historyLog.create({
         data: {

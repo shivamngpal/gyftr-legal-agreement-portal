@@ -326,6 +326,7 @@ export default function DraftWorkspacePage() {
   const [isSavingClauses, setIsSavingClauses] = useState(false);
   const [isSignOffModalOpen, setIsSignOffModalOpen] = useState(false);
   const [isSubmittingSignOff, setIsSubmittingSignOff] = useState(false);
+  const [clauseStatusSuggestion, setClauseStatusSuggestion] = useState<"APPROVED" | "REJECTED" | null>(null);
   const [reminderTeam, setReminderTeam] = useState("Finance");
   const [reminderMessage, setReminderMessage] = useState("");
   const [isSendingReminder, setIsSendingReminder] = useState(false);
@@ -600,12 +601,18 @@ export default function DraftWorkspacePage() {
   const handleSaveClauseReview = useCallback(async () => {
     if (!token || Object.keys(editedClauses).length === 0) return;
     setIsSavingClauses(true);
-    
+
     const payloadClauses = Object.entries(editedClauses).map(([id, data]) => ({
       id,
       outcome: data.outcome,
-      comments: data.comments || null
+      comments: data.comments || null,
     }));
+
+    // Compute merged outcomes before clearing editedClauses
+    const mergedOutcomes = clauses.map((c) => {
+      const edited = editedClauses[c.id];
+      return edited ? edited.outcome : c.outcome;
+    });
 
     try {
       const res = await fetch(`${API_URL}/api/drafts/${draftId}/clauses`, {
@@ -623,14 +630,74 @@ export default function DraftWorkspacePage() {
       }
 
       toast.success("Clause review saved successfully");
+
+      // Optimistically update local state immediately so the UI never flickers back
+      // to PENDING while the serverless DB refetch is in-flight
+      setClauses((prev) =>
+        prev.map((c) => {
+          const edited = editedClauses[c.id];
+          return edited
+            ? { ...c, outcome: edited.outcome, comments: edited.comments ?? c.comments }
+            : c;
+        })
+      );
       setEditedClauses({});
-      fetchClauses();
+      fetchClauses(); // background confirm
+
+      // Suggest status update to Legal only when all clauses resolve uniformly
+      if (user?.role === "LEGAL" && mergedOutcomes.length > 0) {
+        const currentLegalStatus = agreement?.drafts
+          ?.find((d) => d.id === draftId)
+          ?.reviewStatuses?.find((s) => s.team === "LEGAL")?.status;
+
+        if (mergedOutcomes.every((o) => o === "ACCEPTED") && currentLegalStatus !== "APPROVED") {
+          setClauseStatusSuggestion("APPROVED");
+        } else if (mergedOutcomes.every((o) => o === "HELD") && currentLegalStatus !== "REJECTED") {
+          setClauseStatusSuggestion("REJECTED");
+        }
+      }
     } catch (err: any) {
       toast.error(err.message);
     } finally {
       setIsSavingClauses(false);
     }
-  }, [draftId, token, editedClauses, fetchClauses]);
+  }, [draftId, token, editedClauses, clauses, agreement, user, fetchClauses]);
+
+  const handleClauseSuggestionConfirm = useCallback(async (suggestion: "APPROVED" | "REJECTED") => {
+    setClauseStatusSuggestion(null);
+    if (!token) return;
+    try {
+      const currentLegalStatus = agreement?.drafts
+        ?.find((d) => d.id === draftId)
+        ?.reviewStatuses?.find((s) => s.team === "LEGAL")?.status;
+
+      // Backend only allows PENDING→UNDER_REVIEW→APPROVED/REJECTED, so do two steps if needed
+      if (currentLegalStatus === "PENDING") {
+        const r1 = await fetch(`${API_URL}/api/agreements/${id}/review`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ status: "UNDER_REVIEW", draftId }),
+        });
+        if (!r1.ok) throw new Error("Failed to move status to Under Review");
+      }
+
+      const r2 = await fetch(`${API_URL}/api/agreements/${id}/review`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ status: suggestion, draftId }),
+      });
+      if (!r2.ok) {
+        const data = await r2.json().catch(() => ({}));
+        throw new Error(data.message || data.error || "Failed to update review status");
+      }
+
+      toast.success(`Legal review status updated to ${suggestion === "APPROVED" ? "Approved" : "Rejected"}`);
+      fetchAgreementData();
+      fetchHistory();
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  }, [id, draftId, token, agreement, fetchAgreementData, fetchHistory]);
 
   const getTeamStatusBadge = (statuses: ReviewStatus[], team: string) => {
     const status = statuses.find((s) => s.team === team)?.status;
@@ -687,6 +754,7 @@ export default function DraftWorkspacePage() {
   }
 
   const currentDraft = agreement.drafts?.find((d) => d.id === draftId);
+  const userTeamStatus = (currentDraft?.reviewStatuses || []).find((s) => s.team === user?.role)?.status;
 
   const getAgreementStatusBadge = (status: string) => {
     const label = agreementStatusLabels[status] || status;
@@ -1387,6 +1455,15 @@ export default function DraftWorkspacePage() {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                         </svg>
                       </p>
+                    ) : userTeamStatus !== "APPROVED" ? (
+                      <p className="text-sm text-muted-foreground text-center py-2">
+                        Your team&apos;s review status must be{" "}
+                        <span className="font-semibold text-green-700">Approved</span> before you
+                        can sign off.
+                        {userTeamStatus && (
+                          <span className="block text-xs mt-0.5">Current status: {userTeamStatus.replace("_", " ")}</span>
+                        )}
+                      </p>
                     ) : (
                       <div className="space-y-3">
                         {agreement?.status === "PARTIALLY_SIGNED" && (
@@ -1404,6 +1481,35 @@ export default function DraftWorkspacePage() {
               </div>
             </CardContent>
           </Card>
+          {/* Clause Status Suggestion Dialog */}
+          <Dialog
+            open={clauseStatusSuggestion !== null}
+            onOpenChange={(open) => { if (!open) setClauseStatusSuggestion(null); }}
+          >
+            <DialogContent className="sm:max-w-[420px]">
+              <DialogHeader>
+                <DialogTitle>
+                  {clauseStatusSuggestion === "APPROVED"
+                    ? "All Clauses Accepted"
+                    : "All Clauses Held"}
+                </DialogTitle>
+                <DialogDescription className="pt-2">
+                  {clauseStatusSuggestion === "APPROVED"
+                    ? "All clauses have been marked as Accepted. Would you like to update your team's review status to Approved?"
+                    : "All clauses are held. Would you like to update your team's review status to Rejected?"}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => setClauseStatusSuggestion(null)}>
+                  No, I&apos;ll do it manually
+                </Button>
+                <Button onClick={() => handleClauseSuggestionConfirm(clauseStatusSuggestion!)}>
+                  Yes, Update Status
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+
           {/* Sign-Off Confirmation Modal */}
           <Dialog open={isSignOffModalOpen} onOpenChange={setIsSignOffModalOpen}>
             <DialogContent className="sm:max-w-[425px]">

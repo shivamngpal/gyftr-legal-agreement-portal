@@ -20,6 +20,16 @@ export class SignOffService {
     const latestDraft = agreement.drafts[0];
     if (!latestDraft) throw new Error("No draft exists for this agreement");
 
+    // Team status must be APPROVED before signing
+    const teamReviewStatus = await prisma.reviewStatus.findUnique({
+      where: { draftId_team: { draftId: latestDraft.id, team: user.role } },
+    });
+    if (!teamReviewStatus || teamReviewStatus.status !== "APPROVED") {
+      throw new Error(
+        `Your team's review status must be Approved before you can sign off. Current status: ${teamReviewStatus?.status ?? "Unknown"}`
+      );
+    }
+
     const existingSignOff = await prisma.signOff.findUnique({
       where: {
         agreementId_signatoryId: {
