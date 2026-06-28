@@ -8,6 +8,13 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { API_URL } from "@/lib/utils";
 
+const TEST_USERS = [
+  { label: "Legal", email: "legal@gyftr.com" },
+  { label: "Finance", email: "finance@gyftr.com" },
+  { label: "Business", email: "business@gyftr.com" },
+  { label: "Compliance", email: "compliance@gyftr.com" },
+];
+
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -15,15 +22,14 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const doLogin = async (e: string, p: string) => {
     setError(null);
     setLoading(true);
     try {
       const res = await fetch(`${API_URL}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: e, password: p }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Login failed");
@@ -33,6 +39,17 @@ export default function LoginPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await doLogin(email, password);
+  };
+
+  const handleQuickLogin = async (testEmail: string) => {
+    setEmail(testEmail);
+    setPassword("password123");
+    await doLogin(testEmail, "password123");
   };
 
   return (
@@ -75,10 +92,36 @@ export default function LoginPage() {
                 />
               </div>
             </CardContent>
-            <CardFooter>
+            <CardFooter className="flex-col gap-4">
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? "Signing in..." : "Sign in"}
               </Button>
+
+              <div className="w-full space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 border-t border-gray-200" />
+                  <span className="text-xs text-muted-foreground">Test accounts</span>
+                  <div className="flex-1 border-t border-gray-200" />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {TEST_USERS.map(({ label, email: testEmail }) => (
+                    <Button
+                      key={testEmail}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="text-xs"
+                      disabled={loading}
+                      onClick={() => handleQuickLogin(testEmail)}
+                    >
+                      {label}
+                    </Button>
+                  ))}
+                </div>
+                <p className="text-center text-xs text-muted-foreground">
+                  password: <span className="font-mono">password123</span>
+                </p>
+              </div>
             </CardFooter>
           </form>
         </Card>
