@@ -7,6 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ArrowLeftIcon } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -227,6 +231,14 @@ export default function AgreementDetailsPage() {
   const [remarks, setRemarks] = useState<Remark[]>([]);
   const [history, setHistory] = useState<HistoryLog[]>([]);
 
+  const [users, setUsers] = useState<Spoc[]>([]);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
+    clientName: "", type: "",
+    legalSpocName: "", financeSpocName: "", businessSpocName: "", complianceSpocName: "",
+  });
+  const [isEditing, setIsEditing] = useState(false);
+
   const fetchAgreementData = useCallback(async () => {
     if (!token) return;
     const res = await fetch(`${API_URL}/api/agreements/${id}`, {
@@ -281,6 +293,65 @@ export default function AgreementDetailsPage() {
   useEffect(() => {
     fetchAllData();
   }, [fetchAllData]);
+
+  useEffect(() => {
+    if (!token || user?.role !== "LEGAL") return;
+    fetch(`${API_URL}/api/users`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : [])
+      .then(setUsers)
+      .catch(() => {});
+  }, [token, user?.role]);
+
+  const openEdit = useCallback(() => {
+    if (!agreement) return;
+    setEditForm({
+      clientName: agreement.clientName,
+      type: agreement.type,
+      legalSpocName: agreement.legalSpoc?.name || "",
+      financeSpocName: agreement.financeSpoc?.name || "",
+      businessSpocName: agreement.businessSpoc?.name || "",
+      complianceSpocName: agreement.complianceSpoc?.name || "",
+    });
+    setIsEditOpen(true);
+  }, [agreement]);
+
+  const handleEdit = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token) return;
+    setIsEditing(true);
+    try {
+      const body: Record<string, string> = {
+        clientName: editForm.clientName,
+        type: editForm.type,
+      };
+      const spocMap = [
+        { field: "legalSpocId",      role: "LEGAL",      name: editForm.legalSpocName },
+        { field: "financeSpocId",    role: "FINANCE",    name: editForm.financeSpocName },
+        { field: "businessSpocId",   role: "BUSINESS",   name: editForm.businessSpocName },
+        { field: "complianceSpocId", role: "COMPLIANCE", name: editForm.complianceSpocName },
+      ] as const;
+      for (const { field, role, name } of spocMap) {
+        const found = users.find(u => u.role === role && u.name === name)?.id;
+        if (found) body[field] = found;
+      }
+      const res = await fetch(`${API_URL}/api/agreements/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || data.error || "Failed to update agreement");
+      }
+      toast.success("Agreement updated");
+      setIsEditOpen(false);
+      fetchAllData();
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setIsEditing(false);
+    }
+  }, [id, token, editForm, users, fetchAllData]);
 
   const handleAddRemark = useCallback(async (message: string) => {
     if (!token) return;
@@ -409,20 +480,25 @@ export default function AgreementDetailsPage() {
   return (
     <div className="space-y-6 pt-8 pb-10 px-6">
       {/* Header Area */}
-      <div className="flex items-center gap-4">
-        <Link href="/dashboard">
-          <Button variant="outline" size="icon" className="shrink-0">
-            <ArrowLeftIcon className="h-4 w-4" />
-          </Button>
-        </Link>
-        <div>
-          <h2 className="text-xl font-bold tracking-tight">{agreement.clientName}</h2>
-          <div className="flex items-center gap-2 mt-1">
-            <Badge variant="outline" className="text-xs">{agreementTypeLabels[agreement.type] || agreement.type}</Badge>
-            <span className="text-gray-300">•</span>
-            {getAgreementStatusBadge(agreement.status)}
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <Link href="/dashboard">
+            <Button variant="outline" size="icon" className="shrink-0">
+              <ArrowLeftIcon className="h-4 w-4" />
+            </Button>
+          </Link>
+          <div>
+            <h2 className="text-xl font-bold tracking-tight">{agreement.clientName}</h2>
+            <div className="flex items-center gap-2 mt-1">
+              <Badge variant="outline" className="text-xs">{agreementTypeLabels[agreement.type] || agreement.type}</Badge>
+              <span className="text-gray-300">•</span>
+              {getAgreementStatusBadge(agreement.status)}
+            </div>
           </div>
         </div>
+        {user?.role === "LEGAL" && (
+          <Button variant="outline" size="sm" onClick={openEdit}>Edit</Button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -547,6 +623,79 @@ export default function AgreementDetailsPage() {
         <HistorySection history={history} />
 
       </div>
+
+      {/* Edit Agreement Dialog */}
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>Edit Agreement</DialogTitle>
+            <DialogDescription>Update agreement details and SPOC assignments.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleEdit} className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <Label htmlFor="edit-clientName">Client Name</Label>
+              <Input
+                id="edit-clientName"
+                required
+                value={editForm.clientName}
+                onChange={e => setEditForm(f => ({ ...f, clientName: e.target.value }))}
+                disabled={isEditing}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Agreement Type</Label>
+              <Select
+                value={editForm.type}
+                onValueChange={val => { if (val) setEditForm(f => ({ ...f, type: val })); }}
+                required
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="API_DIRECT">API / Direct</SelectItem>
+                  <SelectItem value="WHITE_LABEL">White Label</SelectItem>
+                  <SelectItem value="RESELLER">Reseller</SelectItem>
+                  <SelectItem value="ENTERPRISE">Enterprise</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {([
+                { label: "Legal SPOC",      field: "legalSpocName",      role: "LEGAL" },
+                { label: "Finance SPOC",    field: "financeSpocName",    role: "FINANCE" },
+                { label: "Business SPOC",   field: "businessSpocName",   role: "BUSINESS" },
+                { label: "Compliance SPOC", field: "complianceSpocName", role: "COMPLIANCE" },
+              ] as const).map(({ label, field, role }) => (
+                <div key={field} className="space-y-2">
+                  <Label>{label}</Label>
+                  <Select
+                    value={editForm[field] || undefined}
+                    onValueChange={val => { if (val) setEditForm(f => ({ ...f, [field]: val })); }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {users.filter(u => u.role === role).map(u => (
+                        <SelectItem key={u.id} value={u.name}>{u.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)} disabled={isEditing}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isEditing}>
+                {isEditing ? "Saving..." : "Save Changes"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -628,23 +628,19 @@ export default function DraftWorkspacePage() {
   const getTeamStatusBadge = (statuses: ReviewStatus[], team: string) => {
     const status = statuses.find((s) => s.team === team)?.status;
     if (!status) return <span className="text-xs text-muted-foreground">—</span>;
-    const labels: Record<string, string> = {
-      PENDING: "Pending",
-      UNDER_REVIEW: "Under Review",
-      APPROVED: "Approved",
-      REJECTED: "Rejected",
+    const config: Record<string, { dot: string; text: string; label: string }> = {
+      PENDING:      { dot: "bg-gray-400",  text: "text-gray-500",  label: "Pending" },
+      UNDER_REVIEW: { dot: "bg-blue-500",  text: "text-blue-700",  label: "Under Review" },
+      APPROVED:     { dot: "bg-green-500", text: "text-green-700", label: "Approved" },
+      REJECTED:     { dot: "bg-red-500",   text: "text-red-700",   label: "Rejected" },
     };
-    const label = labels[status] || status;
-    switch (status) {
-      case "APPROVED":
-        return <Badge variant="outline" className="rounded-full text-xs border-green-300 bg-green-50 text-green-700">{label}</Badge>;
-      case "REJECTED":
-        return <Badge variant="destructive" className="rounded-full text-xs">{label}</Badge>;
-      case "UNDER_REVIEW":
-        return <Badge variant="outline" className="rounded-full text-xs border-blue-200 bg-blue-50 text-blue-700">{label}</Badge>;
-      default:
-        return <Badge variant="secondary" className="rounded-full text-xs">{label}</Badge>;
-    }
+    const { dot, text, label } = config[status] || { dot: "bg-gray-400", text: "text-gray-500", label: status };
+    return (
+      <span className="flex items-center gap-1.5">
+        <span className={`inline-block w-2.5 h-2.5 rounded-full flex-shrink-0 ${dot}`} />
+        <span className={`text-xs font-medium ${text}`}>{label}</span>
+      </span>
+    );
   };
 
   if (loading) {
