@@ -83,9 +83,9 @@ JWT_SECRET=your_secret_here
 JWT_EXPIRES_IN=1d
 AWS_ACCESS_KEY_ID=...
 AWS_SECRET_ACCESS_KEY=...
-AWS_REGION=us-east-1
-AWS_S3_BUCKET=your-bucket-name
-OPENAI_API_KEY=sk-...
+AWS_REGION=your_bucket_region
+AWS_S3_BUCKET=your_bucket_name
+OPENAI_API_KEY=your_api_key
 ```
 
 Push the schema and generate the Prisma client:
